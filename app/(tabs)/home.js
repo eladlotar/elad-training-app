@@ -1,27 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, RefreshControl,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { getUser } from '../../src/services/auth';
+import { getMyEnrollments } from '../../src/services/sessions';
 import { C } from '../../src/constants/theme';
+
+const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 export default function HomeScreen() {
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState([]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     const u = await getUser();
     setUser(u);
-    // TODO: Fetch upcoming sessions from Base44
-    setUpcomingSessions([]);
+    if (u?.id) {
+      try {
+        const enrollments = await getMyEnrollments(u.id);
+        const today = new Date().toISOString().slice(0, 10);
+        const upcoming = enrollments
+          .filter(e => e.session_date >= today && e.status === 'confirmed')
+          .sort((a, b) => (a.session_date || '').localeCompare(b.session_date || ''));
+        setUpcomingSessions(upcoming);
+      } catch (e) {
+        console.log('Error loading enrollments:', e.message);
+      }
+    }
   };
+
+  // Reload when tab gets focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -64,25 +80,24 @@ export default function HomeScreen() {
             <Text style={styles.emptySubtext}>לחץ למעלה לקביעת אימון</Text>
           </View>
         ) : (
-          upcomingSessions.map((session, i) => (
-            <View key={i} style={styles.sessionCard}>
-              <View style={styles.sessionDate}>
-                <Text style={styles.sessionDay}>
-                  {new Date(session.date).toLocaleDateString('he-IL', { weekday: 'short' })}
-                </Text>
-                <Text style={styles.sessionDateNum}>
-                  {new Date(session.date).getDate()}
-                </Text>
+          upcomingSessions.map((enrollment) => {
+            const date = new Date(enrollment.session_date);
+            const dayName = DAY_NAMES[date.getDay()];
+            return (
+              <View key={enrollment.id} style={styles.sessionCard}>
+                <View style={styles.sessionDate}>
+                  <Text style={styles.sessionDay}>{dayName}</Text>
+                  <Text style={styles.sessionDateNum}>{date.getDate()}</Text>
+                </View>
+                <View style={styles.sessionInfo}>
+                  <Text style={styles.sessionTitle}>{enrollment.session_title}</Text>
+                  <View style={styles.confirmedBadge}>
+                    <Text style={styles.confirmedText}>מאושר</Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.sessionInfo}>
-                <Text style={styles.sessionTitle}>{session.title}</Text>
-                <Text style={styles.sessionTime}>
-                  {session.start_time} - {session.end_time}
-                </Text>
-                <Text style={styles.sessionLocation}>{session.location}</Text>
-              </View>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
 
@@ -117,15 +132,9 @@ const styles = StyleSheet.create({
   name: { fontSize: 28, fontWeight: '800', color: C.text, marginTop: 2 },
 
   bookButton: {
-    backgroundColor: C.gold,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: C.gold, borderRadius: 16, padding: 20, marginBottom: 24,
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
   bookButtonText: { fontSize: 18, fontWeight: '800', color: C.white, textAlign: 'right' },
   bookButtonSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4, textAlign: 'right' },
@@ -134,51 +143,34 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '800', color: C.text, marginBottom: 12, textAlign: 'right' },
 
   emptyCard: {
-    backgroundColor: C.card,
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: C.border,
+    backgroundColor: C.card, borderRadius: 12, padding: 32, alignItems: 'center',
+    borderWidth: 1, borderColor: C.border,
   },
   emptyText: { fontSize: 14, fontWeight: '700', color: C.muted },
   emptySubtext: { fontSize: 12, color: C.mutedLt, marginTop: 4 },
 
   sessionCard: {
-    backgroundColor: C.card,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: C.border,
+    backgroundColor: C.card, borderRadius: 12, padding: 16,
+    flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 8,
+    borderWidth: 1, borderColor: C.border,
   },
   sessionDate: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: C.goldLt,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
+    width: 48, height: 48, borderRadius: 10, backgroundColor: C.goldLt,
+    justifyContent: 'center', alignItems: 'center', marginLeft: 12,
   },
   sessionDay: { fontSize: 10, fontWeight: '700', color: C.goldDark },
   sessionDateNum: { fontSize: 18, fontWeight: '800', color: C.goldDark },
   sessionInfo: { flex: 1, alignItems: 'flex-end' },
   sessionTitle: { fontSize: 14, fontWeight: '700', color: C.text },
-  sessionTime: { fontSize: 12, color: C.muted, marginTop: 2 },
-  sessionLocation: { fontSize: 11, color: C.mutedLt, marginTop: 1 },
+  confirmedBadge: {
+    backgroundColor: C.okLt, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4,
+  },
+  confirmedText: { fontSize: 10, fontWeight: '700', color: C.ok },
 
   statsRow: { flexDirection: 'row-reverse', gap: 12 },
   statCard: {
-    flex: 1,
-    backgroundColor: C.card,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: C.border,
+    flex: 1, backgroundColor: C.card, borderRadius: 12, padding: 20, alignItems: 'center',
+    borderWidth: 1, borderColor: C.border,
   },
   statValue: { fontSize: 28, fontWeight: '800', color: C.gold },
   statLabel: { fontSize: 12, color: C.muted, marginTop: 4 },

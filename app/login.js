@@ -4,7 +4,7 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { saveUser } from '../src/services/auth';
+import { loginOrRegister } from '../src/services/auth';
 import { C } from '../src/constants/theme';
 
 export default function LoginScreen() {
@@ -30,16 +30,17 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const cleaned = phone.replace(/[\s\-\+]/g, '');
-      // Save locally
-      const userData = {
-        phone: cleaned,
-        full_name: name.trim(),
-        registered_at: new Date().toISOString(),
-      };
-      await saveUser(userData);
+      const result = await loginOrRegister(cleaned, name.trim());
+
+      if (result.is_new) {
+        Alert.alert('ברוך הבא!', 'נרשמת בהצלחה למערכת');
+      } else {
+        Alert.alert('שלום!', `ברוך הבא בחזרה, ${result.customer.full_name}`);
+      }
+
       router.replace('/(tabs)/home');
     } catch (e) {
-      Alert.alert('שגיאה', 'משהו השתבש, נסה שוב');
+      Alert.alert('שגיאה', e.message || 'משהו השתבש, נסה שוב');
     } finally {
       setLoading(false);
     }
@@ -99,7 +100,7 @@ export default function LoginScreen() {
               disabled={!name.trim() || loading}
             >
               <Text style={styles.buttonText}>
-                {loading ? 'נרשם...' : 'הרשמה'}
+                {loading ? 'מתחבר...' : 'כניסה'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setStep('phone')} style={styles.backLink}>
@@ -113,96 +114,32 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  logoArea: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
+  container: { flex: 1, backgroundColor: C.bg },
+  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 32 },
+  logoArea: { alignItems: 'center', marginBottom: 48 },
   logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: C.gold,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: C.gold, justifyContent: 'center', alignItems: 'center',
     marginBottom: 16,
-    shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
-  logoText: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: C.white,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: C.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: C.muted,
-  },
-  formArea: {
-    width: '100%',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: C.text,
-    marginBottom: 8,
-    textAlign: 'right',
-  },
+  logoText: { fontSize: 36, fontWeight: '800', color: C.white },
+  title: { fontSize: 28, fontWeight: '800', color: C.text, marginBottom: 4 },
+  subtitle: { fontSize: 14, color: C.muted },
+  formArea: { width: '100%' },
+  label: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 8, textAlign: 'right' },
   input: {
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 18,
-    color: C.text,
-    marginBottom: 16,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+    borderRadius: 12, padding: 16, fontSize: 18, color: C.text, marginBottom: 16,
   },
   button: {
-    backgroundColor: C.gold,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: C.gold, borderRadius: 12, padding: 16, alignItems: 'center',
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  buttonDisabled: {
-    backgroundColor: C.mutedLt,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: C.white,
-  },
-  backLink: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: 14,
-    color: C.gold,
-    fontWeight: '600',
-  },
+  buttonDisabled: { backgroundColor: C.mutedLt, shadowOpacity: 0, elevation: 0 },
+  buttonText: { fontSize: 16, fontWeight: '800', color: C.white },
+  backLink: { marginTop: 16, alignItems: 'center' },
+  backText: { fontSize: 14, color: C.gold, fontWeight: '600' },
 });
