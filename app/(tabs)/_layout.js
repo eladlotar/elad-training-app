@@ -1,17 +1,10 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 import { C } from '../../src/constants/theme';
 
-function TabIcon({ name, focused }) {
-  const icons = {
-    home: focused ? '⬟' : '⬡',
-    book: focused ? '◼' : '◻',
-    profile: focused ? '●' : '○',
-  };
+function TabIcon({ label, focused }) {
   return (
-    <Text style={{ fontSize: 22, color: focused ? C.gold : C.muted }}>
-      {icons[name] || '○'}
-    </Text>
+    <Text style={[s.icon, focused && s.iconActive]}>{label}</Text>
   );
 }
 
@@ -20,43 +13,70 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: C.card,
-          borderTopColor: C.border,
-          borderTopWidth: 1,
-          height: 85,
-          paddingBottom: 28,
-          paddingTop: 8,
-        },
-        tabBarActiveTintColor: C.gold,
-        tabBarInactiveTintColor: C.muted,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '700',
-        },
+        tabBarStyle: s.tabBar,
+        tabBarActiveTintColor: C.black,
+        tabBarInactiveTintColor: C.mutedLt,
+        tabBarLabelStyle: s.tabLabel,
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
           title: 'ראשי',
-          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon label={focused ? '◉' : '○'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="sessions"
         options={{
           title: 'אימונים',
-          tabBarIcon: ({ focused }) => <TabIcon name="book" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon label={focused ? '▣' : '▢'} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="license"
+        options={{
+          title: 'רישיון',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon label={focused ? '◆' : '◇'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'פרופיל',
-          tabBarIcon: ({ focused }) => <TabIcon name="profile" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon label={focused ? '●' : '○'} focused={focused} />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const s = StyleSheet.create({
+  tabBar: {
+    backgroundColor: C.white,
+    borderTopColor: C.border,
+    borderTopWidth: 1,
+    height: 85,
+    paddingBottom: 28,
+    paddingTop: 8,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  icon: {
+    fontSize: 22,
+    color: C.mutedLt,
+  },
+  iconActive: {
+    color: C.black,
+  },
+});

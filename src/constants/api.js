@@ -19,3 +19,6 @@ export async function callFunction(functionName, data = {}) {
 
   return response.json();
 }
+
+// Offline mode flag — set to false once mobileAppApi is deployed
+export const OFFLINE_MODE = true;

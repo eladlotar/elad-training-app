@@ -1,46 +1,49 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, Alert,
+  StyleSheet, KeyboardAvoidingView, Platform,
+  Alert, ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { loginOrRegister } from '../src/services/auth';
+import { requestOtp, verifyOtp } from '../src/services/auth';
 import { C } from '../src/constants/theme';
 
 export default function LoginScreen() {
-  const [step, setStep] = useState('phone'); // phone -> name
+  const [step, setStep] = useState(1);
   const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const otpRef = useRef(null);
 
-  const handlePhoneSubmit = () => {
-    const cleaned = phone.replace(/[\s\-\+]/g, '');
+  const handleSendOtp = async () => {
+    const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length < 9) {
-      Alert.alert('שגיאה', 'נא להזין מספר טלפון תקין');
-      return;
-    }
-    setStep('name');
-  };
-
-  const handleRegister = async () => {
-    if (!name.trim()) {
-      Alert.alert('שגיאה', 'נא להזין שם מלא');
+      Alert.alert('שגיאה', 'יש להזין מספר טלפון תקין');
       return;
     }
     setLoading(true);
     try {
-      const cleaned = phone.replace(/[\s\-\+]/g, '');
-      const result = await loginOrRegister(cleaned, name.trim());
+      await requestOtp(cleaned.startsWith('0') ? cleaned : '0' + cleaned);
+      setStep(2);
+      setTimeout(() => otpRef.current?.focus(), 300);
+    } catch (e) {
+      Alert.alert('שגיאה', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      if (result.is_new) {
-        Alert.alert('ברוך הבא!', 'נרשמת בהצלחה למערכת');
-      } else {
-        Alert.alert('שלום!', `ברוך הבא בחזרה, ${result.customer.full_name}`);
-      }
-
+  const handleVerifyOtp = async () => {
+    if (otp.length !== 6) {
+      Alert.alert('שגיאה', 'יש להזין קוד בן 6 ספרות');
+      return;
+    }
+    setLoading(true);
+    try {
+      await verifyOtp(otp);
       router.replace('/(tabs)/home');
     } catch (e) {
-      Alert.alert('שגיאה', e.message || 'משהו השתבש, נסה שוב');
+      Alert.alert('שגיאה', e.message);
     } finally {
       setLoading(false);
     }
@@ -48,63 +51,77 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={s.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.inner}>
-        {/* Logo area */}
-        <View style={styles.logoArea}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>E</Text>
+      <View style={s.inner}>
+        <View style={s.logoWrap}>
+          <View style={s.logo}>
+            <Text style={s.logoText}>EL</Text>
           </View>
-          <Text style={styles.title}>ELAD Training</Text>
-          <Text style={styles.subtitle}>בית ספר ללוחמה בטרור</Text>
+          <Text style={s.title}>ELAD LOTAR</Text>
+          <Text style={s.subtitle}>אקדמיה ללוחמה בטרור</Text>
         </View>
 
-        {step === 'phone' ? (
-          <View style={styles.formArea}>
-            <Text style={styles.label}>מספר טלפון</Text>
+        {step === 1 ? (
+          <View style={s.formWrap}>
+            <Text style={s.label}>מספר טלפון</Text>
             <TextInput
-              style={styles.input}
-              placeholder="050-0000000"
+              style={s.input}
+              placeholder="050-1234567"
               placeholderTextColor={C.mutedLt}
               keyboardType="phone-pad"
               textAlign="right"
               value={phone}
               onChangeText={setPhone}
+              maxLength={12}
               autoFocus
             />
             <TouchableOpacity
-              style={[styles.button, !phone && styles.buttonDisabled]}
-              onPress={handlePhoneSubmit}
-              disabled={!phone}
+              style={[s.btn, loading && s.btnDisabled]}
+              onPress={handleSendOtp}
+              disabled={loading}
+              activeOpacity={0.7}
             >
-              <Text style={styles.buttonText}>המשך</Text>
+              {loading ? (
+                <ActivityIndicator color={C.white} />
+              ) : (
+                <Text style={s.btnText}>שליחת קוד אימות</Text>
+              )}
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.formArea}>
-            <Text style={styles.label}>שם מלא</Text>
+          <View style={s.formWrap}>
+            <Text style={s.label}>קוד אימות</Text>
+            <Text style={s.hint}>נשלח קוד בן 6 ספרות למספר {phone}</Text>
             <TextInput
-              style={styles.input}
-              placeholder="השם שלך"
+              ref={otpRef}
+              style={[s.input, s.otpInput]}
+              placeholder="------"
               placeholderTextColor={C.mutedLt}
-              textAlign="right"
-              value={name}
-              onChangeText={setName}
-              autoFocus
+              keyboardType="number-pad"
+              textAlign="center"
+              value={otp}
+              onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
+              maxLength={6}
             />
             <TouchableOpacity
-              style={[styles.button, (!name.trim() || loading) && styles.buttonDisabled]}
-              onPress={handleRegister}
-              disabled={!name.trim() || loading}
+              style={[s.btn, loading && s.btnDisabled]}
+              onPress={handleVerifyOtp}
+              disabled={loading}
+              activeOpacity={0.7}
             >
-              <Text style={styles.buttonText}>
-                {loading ? 'מתחבר...' : 'כניסה'}
-              </Text>
+              {loading ? (
+                <ActivityIndicator color={C.white} />
+              ) : (
+                <Text style={s.btnText}>אימות כניסה</Text>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setStep('phone')} style={styles.backLink}>
-              <Text style={styles.backText}>חזרה</Text>
+            <TouchableOpacity
+              style={s.backBtn}
+              onPress={() => { setStep(1); setOtp(''); }}
+            >
+              <Text style={s.backBtnText}>שינוי מספר טלפון</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -113,33 +130,42 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 32 },
-  logoArea: { alignItems: 'center', marginBottom: 48 },
-  logoCircle: {
+  logoWrap: { alignItems: 'center', marginBottom: 48 },
+  logo: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: C.gold, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: C.black,
+    justifyContent: 'center', alignItems: 'center',
     marginBottom: 16,
-    shadowColor: C.gold, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
-  logoText: { fontSize: 36, fontWeight: '800', color: C.white },
-  title: { fontSize: 28, fontWeight: '800', color: C.text, marginBottom: 4 },
-  subtitle: { fontSize: 14, color: C.muted },
-  formArea: { width: '100%' },
-  label: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 8, textAlign: 'right' },
+  logoText: { fontSize: 28, fontWeight: '800', color: C.white },
+  title: { fontSize: 26, fontWeight: '700', color: C.text, letterSpacing: 3 },
+  subtitle: { fontSize: 14, color: C.muted, marginTop: 4 },
+  formWrap: { gap: 14 },
+  label: { fontSize: 15, fontWeight: '600', color: C.text, textAlign: 'right' },
+  hint: { fontSize: 13, color: C.muted, textAlign: 'right' },
   input: {
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
-    borderRadius: 12, padding: 16, fontSize: 18, color: C.text, marginBottom: 16,
+    backgroundColor: C.bg,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    color: C.text,
   },
-  button: {
-    backgroundColor: C.gold, borderRadius: 12, padding: 16, alignItems: 'center',
-    shadowColor: C.gold, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  otpInput: { fontSize: 28, letterSpacing: 12, fontWeight: '600' },
+  btn: {
+    backgroundColor: C.black,
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 4,
   },
-  buttonDisabled: { backgroundColor: C.mutedLt, shadowOpacity: 0, elevation: 0 },
-  buttonText: { fontSize: 16, fontWeight: '800', color: C.white },
-  backLink: { marginTop: 16, alignItems: 'center' },
-  backText: { fontSize: 14, color: C.gold, fontWeight: '600' },
+  btnDisabled: { opacity: 0.5 },
+  btnText: { fontSize: 16, fontWeight: '700', color: C.white },
+  backBtn: { alignItems: 'center', paddingVertical: 12 },
+  backBtnText: { fontSize: 14, color: C.muted, textDecorationLine: 'underline' },
 });
