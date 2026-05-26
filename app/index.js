@@ -18,7 +18,7 @@ export default function Entry() {
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg }}>
-        <ActivityIndicator size="large" color={C.gold} />
+        <ActivityIndicator size="large" color={C.black} />
       </View>
     );
   }

@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { getUser, saveUser, logout } from '../../src/services/auth';
+import { getUserLevel } from '../../src/constants/levels';
 import { C } from '../../src/constants/theme';
 
 export default function ProfileScreen() {
@@ -67,6 +68,9 @@ export default function ProfileScreen() {
   if (!user) return null;
 
   const initials = (user.full_name || '?').split(' ').map(w => w[0]).join('').slice(0, 2);
+  const totalBullets = user.total_bullets || 0;
+  const totalSessions = user.total_sessions || 0;
+  const levelInfo = getUserLevel(totalBullets, totalSessions);
 
   return (
     <ScrollView
@@ -81,17 +85,25 @@ export default function ProfileScreen() {
         </View>
         <Text style={s.name}>{user.full_name}</Text>
         <Text style={s.phone}>{user.phone}</Text>
+
+        {/* Level Badge */}
+        <View style={s.levelBadgeRow}>
+          <View style={s.levelBadge}>
+            <Text style={s.levelBadgeNum}>{levelInfo.current.level}</Text>
+          </View>
+          <Text style={s.levelBadgeName}>{levelInfo.current.name}</Text>
+        </View>
       </View>
 
       {/* Stats */}
       <View style={s.statsRow}>
         <View style={s.statCard}>
-          <Text style={s.statValue}>{user.total_sessions || 0}</Text>
+          <Text style={s.statValue}>{totalSessions}</Text>
           <Text style={s.statLabel}>אימונים</Text>
         </View>
         <View style={s.statCard}>
-          <Text style={s.statValue}>{user.remaining_credits || 0}</Text>
-          <Text style={s.statLabel}>קרדיטים</Text>
+          <Text style={s.statValue}>{totalBullets.toLocaleString()}</Text>
+          <Text style={s.statLabel}>כדורים</Text>
         </View>
       </View>
 
@@ -195,6 +207,20 @@ const s = StyleSheet.create({
   avatarText: { fontSize: 26, fontWeight: '800', color: C.white },
   name: { fontSize: 22, fontWeight: '800', color: C.text },
   phone: { fontSize: 14, color: C.muted, marginTop: 2 },
+
+  levelBadgeRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  levelBadge: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: C.black,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  levelBadgeNum: { fontSize: 14, fontWeight: '800', color: C.white },
+  levelBadgeName: { fontSize: 14, fontWeight: '700', color: C.text },
 
   statsRow: { flexDirection: 'row-reverse', gap: 10, marginBottom: 24 },
   statCard: {
