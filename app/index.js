@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
-import { getUser } from '../src/services/auth';
+import { getUser, refreshMe, logout } from '../src/services/auth';
 import { C } from '../src/constants/theme';
 
 export default function Entry() {
@@ -9,10 +9,28 @@ export default function Entry() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    getUser()
-      .then(u => setUser(u))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const cached = await getUser();
+        if (!cached) { setUser(null); return; }
+        try {
+          // Validate the session against the server
+          const fresh = await refreshMe();
+          if (fresh) {
+            setUser(fresh);
+          } else {
+            // Session invalid / expired — force re-login
+            await logout();
+            setUser(null);
+          }
+        } catch {
+          // Network error — keep the cached user (offline tolerance)
+          setUser(cached);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   if (loading) {

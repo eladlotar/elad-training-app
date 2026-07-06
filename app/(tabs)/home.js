@@ -1,13 +1,14 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, RefreshControl,
+  TouchableOpacity, RefreshControl, Image, Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { getUser } from '../../src/services/auth';
-import { getNextSession, getMyEnrollments } from '../../src/services/sessions';
-import { getUserLevel } from '../../src/constants/levels';
-import { C } from '../../src/constants/theme';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { getUser, refreshMe } from '../../src/services/auth';
+import { getSessions, getNextSession, getMyEnrollments } from '../../src/services/sessions';
+import { getUserLevel, LEVELS } from '../../src/constants/levels';
+import { useTheme } from '../../src/context/ThemeContext';
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -26,7 +27,7 @@ function getLicenseDaysLeft(expiryStr) {
   return Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
 }
 
-function ProgressBar({ progress, label }) {
+function ProgressBar({ progress, label, s }) {
   return (
     <View style={s.progressRow}>
       <Text style={s.progressLabel}>{label}</Text>
@@ -39,18 +40,27 @@ function ProgressBar({ progress, label }) {
 }
 
 export default function HomeScreen() {
+  const { C } = useTheme();
+  const s = makeStyles(C);
   const [user, setUser] = useState(null);
   const [nextSession, setNextSession] = useState(null);
   const [myEnrollments, setMyEnrollments] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [showLevels, setShowLevels] = useState(false);
 
   const loadData = async () => {
-    const u = await getUser();
+    let u = await getUser();
+    // Refresh stats/credits from the server; on network failure keep cache
+    try {
+      const fresh = await refreshMe();
+      if (fresh) u = fresh;
+    } catch {}
     setUser(u);
+    try { await getSessions(); } catch {}
     setNextSession(getNextSession());
     if (u?.id) {
       try {
-        const enr = await getMyEnrollments(u.id);
+        const enr = await getMyEnrollments();
         setMyEnrollments(enr);
       } catch {}
     }
@@ -71,27 +81,38 @@ export default function HomeScreen() {
   const licenseDays = getLicenseDaysLeft(user?.weapon_license_expiry);
 
   return (
+    <>
     <ScrollView
       style={s.container}
       contentContainerStyle={s.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       {/* Header */}
-      <View style={s.header}>
-        <Text style={s.greeting}>{getGreeting()}</Text>
-        <Text style={s.name}>{firstName}</Text>
+      <View style={s.headerRow}>
+        <Image
+          source={require('../../assets/elad-logo.png')}
+          style={s.logo}
+          resizeMode="contain"
+        />
+        <View style={s.header}>
+          <Text style={s.greeting}>{getGreeting()}</Text>
+          <Text style={s.name}>{firstName}</Text>
+        </View>
       </View>
 
       {/* Level Card */}
       <View style={s.levelCard}>
         <View style={s.levelHeader}>
-          <View style={s.levelBadge}>
-            <Text style={s.levelBadgeText}>{levelInfo.current.level}</Text>
-          </View>
-          <View style={s.levelInfo}>
+          <TouchableOpacity style={s.levelBadge} onPress={() => setShowLevels(true)} activeOpacity={0.7}>
+            <Text style={s.levelEmoji}>{levelInfo.current.emoji}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.levelInfo} onPress={() => setShowLevels(true)} activeOpacity={0.7}>
             <Text style={s.levelName}>{levelInfo.current.name}</Text>
-            <Text style={s.levelLabel}>רמה {levelInfo.current.level}</Text>
-          </View>
+            <View style={s.levelLabelRow}>
+              <Text style={s.levelLabel}>רמה {levelInfo.current.level} · לחץ לכל הדרגות</Text>
+              <Ionicons name="chevron-back" size={13} color={C.muted} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {levelInfo.next && (
@@ -99,11 +120,11 @@ export default function HomeScreen() {
             <Text style={s.levelNextText}>
               עד רמה {levelInfo.next.level} - {levelInfo.next.name}
             </Text>
-            <ProgressBar
+            <ProgressBar s={s}
               progress={levelInfo.bulletsProgress}
               label={`כדורים: ${totalBullets} / ${levelInfo.next.bullets}`}
             />
-            <ProgressBar
+            <ProgressBar s={s}
               progress={levelInfo.sessionsProgress}
               label={`אימונים: ${totalSessions} / ${levelInfo.next.sessions}`}
             />
@@ -153,10 +174,49 @@ export default function HomeScreen() {
         )}
       </View>
 
+      {/* Membership status */}
+      <View style={s.memberCard}>
+        <View style={[s.memberDot, user?.has_membership ? s.memberDotOn : s.memberDotOff]} />
+        <View style={s.memberInfo}>
+          <Text style={s.memberLabel}>סטטוס מנוי</Text>
+          <Text style={s.memberValue}>
+            {user?.has_membership ? (user.membership_products || []).join(' · ') : 'אין מנוי פעיל'}
+          </Text>
+        </View>
+        <Ionicons name={user?.has_membership ? 'ribbon' : 'ribbon-outline'} size={22} color={user?.has_membership ? C.black : C.mutedLt} />
+      </View>
+
+      {/* My weapon */}
+      {(user?.equipment?.gun_manufacturer || user?.weapon_type) && (
+        <TouchableOpacity style={s.weaponCard} onPress={() => router.push('/(tabs)/shooter')} activeOpacity={0.85}>
+          <View style={s.weaponIcon}><MaterialCommunityIcons name="pistol" size={26} color={C.white} /></View>
+          <View style={s.weaponInfo}>
+            <Text style={s.weaponLabel}>האקדח שלי</Text>
+            <Text style={s.weaponName}>
+              {user.equipment?.gun_manufacturer ? `${user.equipment.gun_manufacturer} ${user.equipment.gun_model || ''}`.trim() : user.weapon_type}
+            </Text>
+            {(() => {
+              const eq = user.equipment || {};
+              const mags = eq.magazines || [];
+              const gearCount = ['holster_internal','holster_external','holster_appendix','carry_pouch','mag_pouch','id_cap','conversion_kit']
+                .filter(k => eq[k]).length;
+              const parts = [];
+              if (mags.length) parts.push(`${mags.length} מחסניות · ${mags.reduce((a,b)=>a+(+b||0),0)} כדורים`);
+              if (eq.has_optic && (eq.optic_brand || eq.optic_model)) parts.push(`כוונת: ${`${eq.optic_brand || ''} ${eq.optic_model || ''}`.trim()}`);
+              if (gearCount) parts.push(`${gearCount} פריטי ציוד`);
+              return parts.length ? <Text style={s.weaponMeta}>{parts.join('  ·  ')}</Text> : null;
+            })()}
+          </View>
+          <Ionicons name="chevron-back" size={18} color={C.white} style={{ opacity: 0.7 }} />
+        </TouchableOpacity>
+      )}
+
       {/* Credits + License */}
       <View style={s.statsRow}>
         <View style={s.statCard}>
-          <Text style={s.statValue}>{user?.remaining_credits || 0}</Text>
+          <Text style={s.statValue}>
+            {user?.credits_unlimited ? '∞' : (user?.remaining_credits || 0)}
+          </Text>
           <Text style={s.statLabel}>קרדיטים</Text>
         </View>
         <View style={s.statCard}>
@@ -191,22 +251,82 @@ export default function HomeScreen() {
         </View>
       )}
     </ScrollView>
+
+    {/* All ranks modal */}
+    <Modal visible={showLevels} animationType="slide" transparent onRequestClose={() => setShowLevels(false)}>
+      <View style={s.modalOverlay}>
+        <View style={s.modalSheet}>
+          <View style={s.modalHandle} />
+          <View style={s.modalHeader}>
+            <TouchableOpacity onPress={() => setShowLevels(false)}>
+              <Ionicons name="close" size={24} color={C.muted} />
+            </TouchableOpacity>
+            <Text style={s.modalTitle}>מסלול הדרגות</Text>
+          </View>
+          <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+            {[...LEVELS].reverse().map(lvl => {
+              const isCurrent = lvl.level === levelInfo.current.level;
+              const achieved = totalBullets >= lvl.bullets && totalSessions >= lvl.sessions;
+              const bulletsLeft = Math.max(0, lvl.bullets - totalBullets);
+              const sessionsLeft = Math.max(0, lvl.sessions - totalSessions);
+              return (
+                <View key={lvl.level} style={[s.rankRow, isCurrent && s.rankRowCurrent]}>
+                  <View style={[s.rankEmojiWrap, achieved && s.rankEmojiWrapDone]}>
+                    <Text style={s.rankEmoji}>{lvl.emoji}</Text>
+                  </View>
+                  <View style={s.rankInfo}>
+                    <View style={s.rankTitleRow}>
+                      {isCurrent && <View style={s.currentTag}><Text style={s.currentTagText}>הרמה שלך</Text></View>}
+                      <Text style={s.rankName}>{lvl.name}</Text>
+                    </View>
+                    <Text style={s.rankReq}>
+                      {lvl.bullets.toLocaleString()} כדורים · {lvl.sessions} אימונים
+                    </Text>
+                    {achieved ? (
+                      <View style={s.rankDoneRow}>
+                        <Text style={s.rankDoneText}>הושג</Text>
+                        <Ionicons name="checkmark-circle" size={14} color={C.ok} />
+                      </View>
+                    ) : (
+                      <Text style={s.rankLeft}>
+                        חסר: {bulletsLeft > 0 ? `${bulletsLeft.toLocaleString()} כדורים` : ''}
+                        {bulletsLeft > 0 && sessionsLeft > 0 ? ' · ' : ''}
+                        {sessionsLeft > 0 ? `${sessionsLeft} אימונים` : ''}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={[s.rankNum, isCurrent && s.rankNumCurrent]}>{lvl.level}</Text>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
 
-  header: { marginBottom: 24, alignItems: 'flex-end' },
+  headerRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  header: { alignItems: 'flex-end' },
   greeting: { fontSize: 14, color: C.muted },
   name: { fontSize: 28, fontWeight: '800', color: C.text, marginTop: 2 },
+  logo: { width: 92, height: 46 },
 
   // Level Card
   levelCard: {
     backgroundColor: C.bg,
     borderWidth: 1.5,
-    borderColor: C.text,
+    borderColor: C.black,
     borderRadius: 14,
     padding: 18,
     marginBottom: 20,
@@ -217,14 +337,64 @@ const s = StyleSheet.create({
     marginBottom: 14,
   },
   levelBadge: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: C.black,
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: C.cardAlt,
+    borderWidth: 1.5, borderColor: C.black,
     justifyContent: 'center', alignItems: 'center',
   },
-  levelBadgeText: { fontSize: 20, fontWeight: '800', color: C.white },
+  levelEmoji: { fontSize: 24 },
   levelInfo: { flex: 1, marginRight: 12, alignItems: 'flex-end' },
   levelName: { fontSize: 20, fontWeight: '800', color: C.text },
-  levelLabel: { fontSize: 12, color: C.muted, marginTop: 2 },
+  levelLabelRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 3, marginTop: 2 },
+  levelLabel: { fontSize: 12, color: C.muted },
+
+  // Membership card
+  memberCard: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    backgroundColor: C.bg, borderWidth: 1, borderColor: C.border,
+    borderRadius: 14, padding: 16, marginBottom: 16,
+  },
+  memberDot: { width: 10, height: 10, borderRadius: 5 },
+  memberDotOn: { backgroundColor: C.ok },
+  memberDotOff: { backgroundColor: C.mutedLt },
+  memberInfo: { flex: 1, alignItems: 'flex-end' },
+  memberLabel: { fontSize: 11, color: C.muted, fontWeight: '600' },
+  memberValue: { fontSize: 15, fontWeight: '800', color: C.text, marginTop: 1 },
+
+  // Weapon card
+  weaponCard: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    backgroundColor: C.black, borderRadius: 14, padding: 16, marginBottom: 16,
+  },
+  weaponIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  weaponEmoji: { fontSize: 24 },
+  weaponInfo: { flex: 1, alignItems: 'flex-end' },
+  weaponLabel: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
+  weaponName: { fontSize: 17, fontWeight: '800', color: C.white, marginTop: 1 },
+  weaponMeta: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 3 },
+
+  // Ranks modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 34 },
+  modalHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, marginBottom: 14 },
+  modalHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: C.text },
+  rankRow: { flexDirection: 'row-reverse', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.borderLt, gap: 12 },
+  rankRowCurrent: { backgroundColor: C.cardAlt, borderRadius: 12, paddingHorizontal: 10, borderBottomWidth: 0, marginVertical: 2 },
+  rankEmojiWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  rankEmojiWrapDone: { borderColor: C.ok, backgroundColor: C.okLt },
+  rankEmoji: { fontSize: 22 },
+  rankInfo: { flex: 1, alignItems: 'flex-end' },
+  rankTitleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  rankName: { fontSize: 16, fontWeight: '800', color: C.text },
+  currentTag: { backgroundColor: C.black, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  currentTagText: { fontSize: 10, fontWeight: '700', color: C.white },
+  rankReq: { fontSize: 12, color: C.muted, marginTop: 2 },
+  rankDoneRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginTop: 3 },
+  rankDoneText: { fontSize: 11, fontWeight: '700', color: C.ok },
+  rankLeft: { fontSize: 11, color: C.warn, fontWeight: '600', marginTop: 3 },
+  rankNum: { fontSize: 18, fontWeight: '800', color: C.mutedLt, width: 22, textAlign: 'center' },
+  rankNumCurrent: { color: C.black },
   levelProgress: { marginBottom: 14 },
   levelNextText: { fontSize: 12, color: C.muted, textAlign: 'right', marginBottom: 8 },
 
@@ -268,14 +438,14 @@ const s = StyleSheet.create({
     flexDirection: 'row-reverse',
     backgroundColor: C.bg,
     borderWidth: 1.5,
-    borderColor: C.text,
+    borderColor: C.black,
     borderRadius: 12,
     overflow: 'hidden',
   },
   nextCardRight: { flex: 1, padding: 16, alignItems: 'flex-end' },
   nextCardLeft: {
     width: 70,
-    backgroundColor: C.text,
+    backgroundColor: C.black,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 12,

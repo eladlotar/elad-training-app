@@ -1,12 +1,12 @@
 // ELAD Training App — Level System
 const LEVELS = [
-  { level: 1, name: 'טירון', bullets: 0, sessions: 0 },
-  { level: 2, name: 'חניך', bullets: 250, sessions: 4 },
-  { level: 3, name: 'יורה', bullets: 500, sessions: 8 },
-  { level: 4, name: 'מתקדם', bullets: 1000, sessions: 12 },
-  { level: 5, name: 'מיומן', bullets: 1700, sessions: 16 },
-  { level: 6, name: 'מומחה', bullets: 2300, sessions: 20 },
-  { level: 7, name: 'לוחם', bullets: 3000, sessions: 24 },
+  { level: 1, name: 'טירון',  emoji: '🥾', bullets: 0,    sessions: 0 },
+  { level: 2, name: 'חניך',   emoji: '🪖', bullets: 250,  sessions: 4 },
+  { level: 3, name: 'יורה',   emoji: '🎯', bullets: 500,  sessions: 8 },
+  { level: 4, name: 'מתקדם',  emoji: '🔥', bullets: 1000, sessions: 12 },
+  { level: 5, name: 'מיומן',  emoji: '🛡️', bullets: 1700, sessions: 16 },
+  { level: 6, name: 'מומחה',  emoji: '⚔️', bullets: 2300, sessions: 20 },
+  { level: 7, name: 'לוחם',   emoji: '🎖️', bullets: 3000, sessions: 24 },
 ];
 
 export function getUserLevel(totalBullets, totalSessions) {

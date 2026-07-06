@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getUser } from '../../src/services/auth';
-import { C } from '../../src/constants/theme';
+import { useTheme } from '../../src/context/ThemeContext';
 
 export default function LicenseScreen() {
+  const { C } = useTheme();
+  const s = makeStyles(C);
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -109,7 +111,7 @@ export default function LicenseScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
 

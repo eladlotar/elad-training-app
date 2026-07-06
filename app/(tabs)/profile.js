@@ -4,11 +4,14 @@ import {
   TouchableOpacity, TextInput, Alert, RefreshControl,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { getUser, saveUser, logout } from '../../src/services/auth';
+import { Ionicons } from '@expo/vector-icons';
+import { getUser, refreshMe, updateProfile, logout } from '../../src/services/auth';
 import { getUserLevel } from '../../src/constants/levels';
-import { C } from '../../src/constants/theme';
+import { useTheme } from '../../src/context/ThemeContext';
 
 export default function ProfileScreen() {
+  const { C } = useTheme();
+  const s = makeStyles(C);
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -17,7 +20,11 @@ export default function ProfileScreen() {
   const [editDay, setEditDay] = useState('');
 
   const loadData = async () => {
-    const u = await getUser();
+    let u = await getUser();
+    try {
+      const fresh = await refreshMe();
+      if (fresh) u = fresh;
+    } catch {}
     setUser(u);
     if (u) {
       setEditName(u.full_name || '');
@@ -39,16 +46,18 @@ export default function ProfileScreen() {
       Alert.alert('שגיאה', 'שם לא יכול להיות ריק');
       return;
     }
-    const updated = {
-      ...user,
-      full_name: editName.trim(),
-      email: editEmail.trim(),
-      preferred_day: editDay.trim(),
-    };
-    await saveUser(updated);
-    setUser(updated);
-    setEditing(false);
-    Alert.alert('נשמר', 'הפרטים עודכנו');
+    try {
+      const updated = await updateProfile({
+        full_name: editName.trim(),
+        email: editEmail.trim(),
+        preferred_day: editDay.trim(),
+      });
+      setUser(updated);
+      setEditing(false);
+      Alert.alert('נשמר', 'הפרטים עודכנו במערכת');
+    } catch (e) {
+      Alert.alert('שגיאה', e.message);
+    }
   };
 
   const handleLogout = () => {
@@ -185,6 +194,32 @@ export default function ProfileScreen() {
         )}
       </View>
 
+      {/* Shooter profile & equipment */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>פרטי יורה וציוד</Text>
+        <TouchableOpacity style={s.shooterCard} onPress={() => router.push('/(tabs)/shooter')} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={20} color={C.mutedLt} />
+          <View style={s.shooterInfo}>
+            {user.equipment?.gun_manufacturer || user.weapon_type ? (
+              <>
+                <Text style={s.shooterTitle}>{user.equipment?.gun_manufacturer ? `${user.equipment.gun_manufacturer} ${user.equipment.gun_model || ''}`.trim() : user.weapon_type}</Text>
+                <Text style={s.shooterSub}>
+                  {user.national_id || user.id_number ? 'פרטי יורה מולאו' : 'השלם פרטי יורה'} · לחץ לעריכה
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={s.shooterTitle}>מילוי פרטי יורה וציוד</Text>
+                <Text style={s.shooterSub}>אקדח, מחסניות, נרתיקים וציוד</Text>
+              </>
+            )}
+          </View>
+          <View style={s.shooterIcon}>
+            <Ionicons name="shield-checkmark" size={22} color={C.white} />
+          </View>
+        </TouchableOpacity>
+      </View>
+
       {/* Logout */}
       <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
         <Text style={s.logoutText}>התנתקות</Text>
@@ -193,7 +228,7 @@ export default function ProfileScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
 
@@ -268,4 +303,14 @@ const s = StyleSheet.create({
     borderColor: C.err,
   },
   logoutText: { fontSize: 15, fontWeight: '700', color: C.err },
+
+  shooterCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: C.bg, borderWidth: 1, borderColor: C.border,
+    borderRadius: 14, padding: 14,
+  },
+  shooterInfo: { flex: 1, alignItems: 'flex-end' },
+  shooterTitle: { fontSize: 15, fontWeight: '800', color: C.text },
+  shooterSub: { fontSize: 12, color: C.muted, marginTop: 2 },
+  shooterIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: C.black, alignItems: 'center', justifyContent: 'center' },
 });

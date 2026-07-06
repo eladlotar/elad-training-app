@@ -1,6 +1,7 @@
 import { callFunction, OFFLINE_MODE } from '../constants/api';
+import { getToken } from './auth';
 
-// Demo sessions — late May / early June 2026
+// Demo sessions — used only when OFFLINE_MODE is true
 const DEMO_SESSIONS = [
   {
     id: 's1',
@@ -28,117 +29,22 @@ const DEMO_SESSIONS = [
     enrolled_count: 15,
     status: 'full',
   },
-  {
-    id: 's3',
-    title: 'אימון הגנה עצמית',
-    type: 'training',
-    date: '2026-05-26',
-    start_time: '10:00',
-    end_time: '12:00',
-    location: 'אולם אימונים',
-    instructor_name: 'אבי שמש',
-    max_participants: 10,
-    enrolled_count: 4,
-    status: 'open',
-  },
-  {
-    id: 's4',
-    title: 'אימון טקטי מתקדם',
-    type: 'training',
-    date: '2026-05-27',
-    start_time: '08:00',
-    end_time: '11:00',
-    location: 'שטח אימונים',
-    instructor_name: 'משה דוד',
-    max_participants: 8,
-    enrolled_count: 6,
-    status: 'open',
-  },
-  {
-    id: 's5',
-    title: 'ירי אקדח למתחילים',
-    type: 'training',
-    date: '2026-05-28',
-    start_time: '14:00',
-    end_time: '16:00',
-    location: 'מטווח מרכזי',
-    instructor_name: 'יוסי כהן',
-    max_participants: 10,
-    enrolled_count: 2,
-    status: 'open',
-  },
-  {
-    id: 's6',
-    title: 'אימון CQB',
-    type: 'training',
-    date: '2026-05-29',
-    start_time: '09:00',
-    end_time: '12:00',
-    location: 'מתחם אימונים טקטי',
-    instructor_name: 'דני לוי',
-    max_participants: 8,
-    enrolled_count: 5,
-    status: 'open',
-  },
-  {
-    id: 's7',
-    title: 'ירי רובה ארוך',
-    type: 'training',
-    date: '2026-05-31',
-    start_time: '08:00',
-    end_time: '11:00',
-    location: 'מטווח מרכזי',
-    instructor_name: 'משה דוד',
-    max_participants: 6,
-    enrolled_count: 3,
-    status: 'open',
-  },
-  {
-    id: 's8',
-    title: 'סדנת מודעות ביטחונית',
-    type: 'course',
-    date: '2026-06-01',
-    start_time: '18:00',
-    end_time: '20:00',
-    location: 'כיתת לימוד',
-    instructor_name: 'אבי שמש',
-    max_participants: 20,
-    enrolled_count: 12,
-    status: 'open',
-  },
-  {
-    id: 's9',
-    title: 'אימון ירי דינמי',
-    type: 'training',
-    date: '2026-06-02',
-    start_time: '10:00',
-    end_time: '12:00',
-    location: 'מטווח מרכזי',
-    instructor_name: 'יוסי כהן',
-    max_participants: 10,
-    enrolled_count: 7,
-    status: 'open',
-  },
-  {
-    id: 's10',
-    title: 'אימון הגנה בסכין',
-    type: 'training',
-    date: '2026-06-03',
-    start_time: '17:00',
-    end_time: '19:00',
-    location: 'אולם אימונים',
-    instructor_name: 'דני לוי',
-    max_participants: 12,
-    enrolled_count: 9,
-    status: 'open',
-  },
 ];
 
 let demoEnrollments = [];
 
+// Live sessions cache — filled by getSessions(), read by the sync helpers
+// so the screens can group/filter without re-fetching.
+let sessionsCache = null;
+
+function activeSessions() {
+  if (OFFLINE_MODE) return DEMO_SESSIONS;
+  return sessionsCache || [];
+}
+
 export function getSessionsByDate() {
   const byDate = {};
-  for (const s of DEMO_SESSIONS) {
+  for (const s of activeSessions()) {
     if (!byDate[s.date]) byDate[s.date] = [];
     byDate[s.date].push(s);
   }
@@ -146,13 +52,13 @@ export function getSessionsByDate() {
 }
 
 export function getSessionDates() {
-  return [...new Set(DEMO_SESSIONS.map(s => s.date))];
+  return [...new Set(activeSessions().map(s => s.date))];
 }
 
 export function getNextSession() {
   const now = new Date();
-  const upcoming = DEMO_SESSIONS
-    .filter(s => new Date(s.date + 'T' + s.start_time) > now && s.status === 'open')
+  const upcoming = activeSessions()
+    .filter(s => new Date(s.date + 'T' + (s.start_time || '00:00')) > now && s.status === 'open')
     .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time));
   return upcoming[0] || null;
 }
@@ -183,11 +89,19 @@ function dateToStr(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** Fetch upcoming sessions from the server and refresh the cache. */
 export async function getSessions() {
   if (OFFLINE_MODE) return DEMO_SESSIONS;
-  const result = await callFunction('mobileAppApi', { action: 'getSessions' });
-  if (!result.ok) throw new Error(result.error);
-  return result.sessions;
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
+  const result = await callFunction('mobileAppApi', { action: 'getSessions', token });
+  if (!result.ok) throw new Error(result.error || 'שגיאה בטעינת אימונים');
+  // Private lessons are booked by staff only — hidden from the app list.
+  // (Interim title-based filter; will be replaced by product-based visibility.)
+  sessionsCache = (result.sessions || []).filter(
+    s => !String(s.title || '').includes('פרטי')
+  );
+  return sessionsCache;
 }
 
 export async function enrollInSession(customerId, sessionId) {
@@ -208,46 +122,45 @@ export async function enrollInSession(customerId, sessionId) {
       status: 'confirmed',
     };
     demoEnrollments.push(enrollment);
-    session.enrolled_count++;
-    if (session.enrolled_count >= session.max_participants) session.status = 'full';
     return enrollment;
   }
+  // customerId is intentionally NOT sent — the server derives the customer
+  // from the session token (never trusts a client-supplied id).
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
   const result = await callFunction('mobileAppApi', {
     action: 'enroll',
-    customer_id: customerId,
+    token,
     session_id: sessionId,
   });
-  if (!result.ok) throw new Error(result.error);
+  if (!result.ok) throw new Error(result.error || 'שגיאה בהרשמה');
   return result.enrollment;
 }
 
-export async function getMyEnrollments(customerId) {
+export async function getMyEnrollments() {
   if (OFFLINE_MODE) return demoEnrollments;
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
   const result = await callFunction('mobileAppApi', {
     action: 'getMyEnrollments',
-    customer_id: customerId,
+    token,
   });
-  if (!result.ok) throw new Error(result.error);
+  if (!result.ok) throw new Error(result.error || 'שגיאה בטעינה');
   return result.enrollments;
 }
 
 export async function cancelEnrollment(enrollmentId) {
   if (OFFLINE_MODE) {
-    const enrollment = demoEnrollments.find(e => e.id === enrollmentId);
-    if (enrollment) {
-      const session = DEMO_SESSIONS.find(s => s.id === enrollment.session_id);
-      if (session) {
-        session.enrolled_count--;
-        if (session.status === 'full') session.status = 'open';
-      }
-    }
     demoEnrollments = demoEnrollments.filter(e => e.id !== enrollmentId);
     return true;
   }
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
   const result = await callFunction('mobileAppApi', {
     action: 'cancelEnrollment',
+    token,
     enrollment_id: enrollmentId,
   });
-  if (!result.ok) throw new Error(result.error);
+  if (!result.ok) throw new Error(result.error || 'שגיאה בביטול');
   return true;
 }

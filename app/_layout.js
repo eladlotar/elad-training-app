@@ -1,9 +1,10 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider } from '../src/context/ThemeContext';
 
 export default function RootLayout() {
   return (
-    <>
+    <ThemeProvider>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -16,6 +17,6 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
       </Stack>
-    </>
+    </ThemeProvider>
   );
 }
