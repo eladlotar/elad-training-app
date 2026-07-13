@@ -29,8 +29,20 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
-      "expo-web-browser"
-    ]
+      "expo-router"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8dee4aae-90a5-4b29-a26a-769c1b929c21"
+      }
+    },
+    "owner": "eladlotar",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8dee4aae-90a5-4b29-a26a-769c1b929c21"
+    }
   }
 }
