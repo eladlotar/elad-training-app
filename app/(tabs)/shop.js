@@ -206,6 +206,9 @@ export default function ShopScreen() {
             <View style={s.section}>
               <Text style={s.sectionTitle}>מנויים חודשיים</Text>
               {subscriptions.map(renderCard)}
+              <TouchableOpacity onPress={() => router.push('/terms')} activeOpacity={0.7}>
+                <Text style={s.termsLink}>ההצטרפות למנוי כפופה לתקנון המנויים — לחצו לקריאה</Text>
+              </TouchableOpacity>
             </View>
           )}
           {others.length > 0 && (
@@ -290,6 +293,11 @@ const makeStyles = (C) => StyleSheet.create({
   cancelReqText: { fontSize: 13, fontWeight: '700', color: C.err },
 
   contactText: { fontSize: 13, fontWeight: '600', color: C.muted, textAlign: 'center', marginTop: 4, paddingVertical: 8 },
+
+  termsLink: {
+    fontSize: 12.5, fontWeight: '600', color: C.textSecondary,
+    textAlign: 'center', textDecorationLine: 'underline', marginTop: 6, paddingVertical: 4,
+  },
 
   emptyCard: {
     flex: 1, backgroundColor: C.cardAlt, borderRadius: 16,
