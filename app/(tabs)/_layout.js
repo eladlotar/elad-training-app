@@ -90,6 +90,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen name="license" options={{ href: null }} />
       <Tabs.Screen name="shooter" options={{ href: null }} />
+      <Tabs.Screen name="subscription" options={{ href: null }} />
     </Tabs>
   );
 }

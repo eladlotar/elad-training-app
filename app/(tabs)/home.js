@@ -175,16 +175,23 @@ export default function HomeScreen() {
       </View>
 
       {/* Membership status */}
-      <View style={s.memberCard}>
+      <TouchableOpacity
+        style={s.memberCard}
+        onPress={() => router.push('/(tabs)/subscription')}
+        activeOpacity={0.85}
+      >
         <View style={[s.memberDot, user?.has_membership ? s.memberDotOn : s.memberDotOff]} />
         <View style={s.memberInfo}>
           <Text style={s.memberLabel}>סטטוס מנוי</Text>
           <Text style={s.memberValue}>
             {user?.has_membership ? (user.membership_products || []).join(' · ') : 'אין מנוי פעיל'}
           </Text>
+          {user?.subscription?.usage_label ? (
+            <Text style={s.memberUsage}>{user.subscription.usage_label}</Text>
+          ) : null}
         </View>
         <Ionicons name={user?.has_membership ? 'ribbon' : 'ribbon-outline'} size={22} color={user?.has_membership ? C.black : C.mutedLt} />
-      </View>
+      </TouchableOpacity>
 
       {/* My weapon */}
       {(user?.equipment?.gun_manufacturer || user?.weapon_type) && (
@@ -360,6 +367,7 @@ const makeStyles = (C) => StyleSheet.create({
   memberInfo: { flex: 1, alignItems: 'flex-end' },
   memberLabel: { fontSize: 11, color: C.muted, fontWeight: '600' },
   memberValue: { fontSize: 15, fontWeight: '800', color: C.text, marginTop: 1 },
+  memberUsage: { fontSize: 12, color: C.textSecondary, fontWeight: '600', marginTop: 3 },
 
   // Weapon card
   weaponCard: {

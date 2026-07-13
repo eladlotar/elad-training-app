@@ -33,6 +33,32 @@ export default function RegistrationsScreen() {
     setRefreshing(false);
   };
 
+  // Two-stage cancel: first try without acknowledge; when the server answers
+  // late_confirm_required, ask the user to explicitly burn the entry.
+  const performCancel = async (enrollment, acknowledgeBurn) => {
+    try {
+      const result = await cancelEnrollment(enrollment.id, { acknowledgeBurn });
+      if (result?.late_cancelled) {
+        Alert.alert('הביטול נקלט', 'הביטול נקלט. הכניסה נשרפה בהתאם למדיניות.');
+      }
+      await loadData();
+    } catch (e) {
+      if (e.error_code === 'late_confirm_required') {
+        Alert.alert('ביטול מאוחר', e.message, [
+          { text: 'ביטול', style: 'cancel' },
+          {
+            text: 'בטל בכל זאת',
+            style: 'destructive',
+            onPress: () => performCancel(enrollment, true),
+          },
+        ]);
+      } else {
+        Alert.alert('שגיאה', e.message);
+        await loadData();
+      }
+    }
+  };
+
   const handleCancel = (enrollment) => {
     Alert.alert(
       'ביטול רישום',
@@ -42,14 +68,7 @@ export default function RegistrationsScreen() {
         {
           text: 'בטל רישום',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await cancelEnrollment(enrollment.id);
-              await loadData();
-            } catch (e) {
-              Alert.alert('שגיאה', e.message);
-            }
-          },
+          onPress: () => performCancel(enrollment, false),
         },
       ]
     );
@@ -88,12 +107,21 @@ export default function RegistrationsScreen() {
                   {d ? `יום ${DAY_NAMES[d.getDay()]}` : ''} | {e.session_time || ''}
                 </Text>
                 {e.session_location ? <Text style={s.cardMeta}>{e.session_location}</Text> : null}
-                {e.can_cancel ? (
+                {e.cancel_mode === 'started' ? (
+                  <Text style={s.noCancelText}>האימון התחיל</Text>
+                ) : e.cancel_mode === 'late' ? (
+                  <>
+                    <TouchableOpacity style={[s.cancelBtn, s.lateBtn]} onPress={() => handleCancel(e)} activeOpacity={0.7}>
+                      <Text style={[s.cancelBtnText, s.lateBtnText]}>ביטול מאוחר</Text>
+                    </TouchableOpacity>
+                    {e.late_cancel_warning ? (
+                      <Text style={s.lateWarnText}>{e.late_cancel_warning}</Text>
+                    ) : null}
+                  </>
+                ) : (
                   <TouchableOpacity style={s.cancelBtn} onPress={() => handleCancel(e)} activeOpacity={0.7}>
                     <Text style={s.cancelBtnText}>ביטול רישום</Text>
                   </TouchableOpacity>
-                ) : (
-                  <Text style={s.noCancelText}>לא ניתן לבטל — קרוב למועד האימון</Text>
                 )}
               </View>
             </View>
@@ -150,5 +178,8 @@ const makeStyles = (C) => StyleSheet.create({
     borderColor: C.err,
   },
   cancelBtnText: { fontSize: 12, fontWeight: '700', color: C.err },
+  lateBtn: { borderColor: C.warn },
+  lateBtnText: { color: C.warn },
+  lateWarnText: { fontSize: 10, color: C.warn, marginTop: 6, textAlign: 'right' },
   noCancelText: { fontSize: 11, color: C.mutedLt, marginTop: 10 },
 });

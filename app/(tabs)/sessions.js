@@ -93,6 +93,8 @@ export default function SessionsScreen() {
     profile_incomplete: 'יש להשלים פרטי יורה (ת"ז, רישיון, מספר כלי) לפני הרשמה.',
     no_product: 'אין לך מנוי או מוצר שמתאים לאימון הזה. לפרטים פנה אלינו.',
     no_credit: 'נגמרו הקרדיטים במנוי שלך. לחידוש פנה אלינו.',
+    debt: 'יש חוב פתוח על המנוי. יש להסדיר תשלום מול בית הספר.',
+    quota_exceeded: 'ניצלת את מכסת האימונים החודשית במנוי.',
     inactive: 'החשבון אינו פעיל כרגע. פנה אלינו.',
     full: 'האימון מלא.',
   };
@@ -137,16 +139,30 @@ export default function SessionsScreen() {
     );
   };
 
+  // Two-stage cancel: a late cancel needs explicit burn confirmation.
+  const performCancel = async (enrollment, acknowledgeBurn) => {
+    try {
+      const result = await cancelEnrollment(enrollment.id, { acknowledgeBurn });
+      if (result?.late_cancelled) {
+        Alert.alert('הביטול נקלט', 'הביטול נקלט. הכניסה נשרפה בהתאם למדיניות.');
+      }
+      await loadData();
+    } catch (e) {
+      if (e.error_code === 'late_confirm_required') {
+        Alert.alert('ביטול מאוחר', e.message, [
+          { text: 'ביטול', style: 'cancel' },
+          { text: 'בטל בכל זאת', style: 'destructive', onPress: () => performCancel(enrollment, true) },
+        ]);
+      } else {
+        Alert.alert('שגיאה', e.message);
+      }
+    }
+  };
+
   const handleCancel = (enrollment) => {
     Alert.alert('ביטול רישום', `לבטל את ${enrollment.session_title}?`, [
       { text: 'לא', style: 'cancel' },
-      {
-        text: 'בטל', style: 'destructive',
-        onPress: async () => {
-          try { await cancelEnrollment(enrollment.id); await loadData(); }
-          catch (e) { Alert.alert('שגיאה', e.message); }
-        },
-      },
+      { text: 'בטל', style: 'destructive', onPress: () => performCancel(enrollment, false) },
     ]);
   };
 

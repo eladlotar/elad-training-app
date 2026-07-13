@@ -33,6 +33,18 @@ const DEMO_SESSIONS = [
 
 let demoEnrollments = [];
 
+/**
+ * Build an Error from a { ok:false } server response, preserving the
+ * machine-readable fields the screens branch on (error_code,
+ * cancel_days_before for late-cancel confirmations).
+ */
+function serverError(result, fallback) {
+  const err = new Error(result?.error || fallback);
+  if (result?.error_code) err.error_code = result.error_code;
+  if (result?.cancel_days_before != null) err.cancel_days_before = result.cancel_days_before;
+  return err;
+}
+
 // Live sessions cache — filled by getSessions(), read by the sync helpers
 // so the screens can group/filter without re-fetching.
 let sessionsCache = null;
@@ -95,7 +107,7 @@ export async function getSessions() {
   const token = await getToken();
   if (!token) throw new Error('יש להתחבר מחדש');
   const result = await callFunction('mobileAppApi', { action: 'getSessions', token });
-  if (!result.ok) throw new Error(result.error || 'שגיאה בטעינת אימונים');
+  if (!result.ok) throw serverError(result, 'שגיאה בטעינת אימונים');
   // Private lessons are booked by staff only — hidden from the app list.
   // (Interim title-based filter; will be replaced by product-based visibility.)
   sessionsCache = (result.sessions || []).filter(
@@ -133,7 +145,7 @@ export async function enrollInSession(customerId, sessionId) {
     token,
     session_id: sessionId,
   });
-  if (!result.ok) throw new Error(result.error || 'שגיאה בהרשמה');
+  if (!result.ok) throw serverError(result, 'שגיאה בהרשמה');
   return result.enrollment;
 }
 
@@ -145,22 +157,31 @@ export async function getMyEnrollments() {
     action: 'getMyEnrollments',
     token,
   });
-  if (!result.ok) throw new Error(result.error || 'שגיאה בטעינה');
+  if (!result.ok) throw serverError(result, 'שגיאה בטעינה');
   return result.enrollments;
 }
 
-export async function cancelEnrollment(enrollmentId) {
+/**
+ * Cancel an enrollment.
+ * Inside the cancellation window the server refuses with
+ * error_code 'late_confirm_required' until the user explicitly agrees to
+ * burn the entry — retry with opts.acknowledgeBurn = true.
+ * Resolves to the server result ({ ok: true, late_cancelled? }).
+ */
+export async function cancelEnrollment(enrollmentId, opts = {}) {
   if (OFFLINE_MODE) {
     demoEnrollments = demoEnrollments.filter(e => e.id !== enrollmentId);
-    return true;
+    return { ok: true };
   }
   const token = await getToken();
   if (!token) throw new Error('יש להתחבר מחדש');
-  const result = await callFunction('mobileAppApi', {
+  const payload = {
     action: 'cancelEnrollment',
     token,
     enrollment_id: enrollmentId,
-  });
-  if (!result.ok) throw new Error(result.error || 'שגיאה בביטול');
-  return true;
+  };
+  if (opts.acknowledgeBurn === true) payload.acknowledge_burn = true;
+  const result = await callFunction('mobileAppApi', payload);
+  if (!result.ok) throw serverError(result, 'שגיאה בביטול');
+  return result;
 }
