@@ -64,7 +64,8 @@ export default function PaymentScreen() {
         const d = await getMySubscription();
         const count =
           (d.subscriptions?.length || 0) + (d.pending_requests?.length || 0);
-        if (baseline == null ? count > 0 : count > baseline) {
+        // בלי צילום מצב התחלתי אי אפשר להבחין בין מנוי ותיק לרכישה חדשה — לא מכריזים הצלחה
+        if (baseline != null && count > baseline) {
           confirmedRef.current = true;
           checkingRef.current = false;
           setStatus('confirmed');

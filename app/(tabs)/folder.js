@@ -38,7 +38,9 @@ export default function FolderScreen() {
     try {
       const raw = await AsyncStorage.getItem(metaKey(id));
       setDocs(raw ? JSON.parse(raw) : []);
-    } catch { setDocs([]); }
+    } catch {
+      // כשל קריאה — משאירים את המסמכים המוצגים במקום למחוק אותם מהמסך
+    }
   };
 
   useFocusEffect(useCallback(() => {

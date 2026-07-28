@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getUser } from '../../src/services/auth';
+import { parseLocalDate } from '../../src/utils/date';
 import { useTheme } from '../../src/context/ThemeContext';
 
 export default function LicenseScreen() {
@@ -25,7 +26,7 @@ export default function LicenseScreen() {
     setRefreshing(false);
   };
 
-  const expiry = user?.weapon_license_expiry ? new Date(user.weapon_license_expiry) : null;
+  const expiry = user?.weapon_license_expiry ? parseLocalDate(user.weapon_license_expiry) : null;
   const now = new Date();
   const diffDays = expiry ? Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)) : null;
 

@@ -33,7 +33,8 @@ function getGreeting() {
 function getLicenseDaysLeft(expiryStr) {
   if (!expiryStr) return null;
   const now = new Date();
-  const expiry = new Date(expiryStr);
+  const expiry = parseLocalDate(expiryStr);
+  if (!expiry) return null;
   return Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
 }
 
