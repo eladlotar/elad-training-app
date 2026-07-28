@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, RefreshControl,
+  View, Text, ScrollView, StyleSheet, RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getUser } from '../../src/services/auth';
@@ -39,10 +38,6 @@ export default function LicenseScreen() {
     else if (diffDays <= 30) { statusColor = C.warn; statusBg = C.warnLt; statusText = 'פג בקרוב'; }
     else if (diffDays <= 60) { statusColor = C.warn; statusBg = C.warnLt; statusText = 'שים לב'; }
   }
-
-  const handleReminder = () => {
-    Alert.alert('תזכורת נשלחה', 'תזכורת לחידוש רישיון נשלחה אליך בוואטסאפ');
-  };
 
   return (
     <ScrollView
@@ -92,12 +87,8 @@ export default function LicenseScreen() {
         </View>
       </View>
 
-      {/* Reminder button */}
-      {diffDays !== null && diffDays <= 60 && (
-        <TouchableOpacity style={s.reminderBtn} onPress={handleReminder} activeOpacity={0.7}>
-          <Text style={s.reminderBtnText}>שלח תזכורת חידוש</Text>
-        </TouchableOpacity>
-      )}
+      {/* כפתור "שלח תזכורת" הוסר — הוא הציג הודעת הצלחה בלי לשלוח כלום.
+          שליחת תזכורת אמיתית בוואטסאפ מחייבת פעולה בצד השרת (מתוכנן). */}
 
       {/* Info */}
       <View style={s.infoCard}>
@@ -150,15 +141,6 @@ const makeStyles = (C) => StyleSheet.create({
   },
   rowLabel: { fontSize: 13, fontWeight: '600', color: C.text },
   rowValue: { fontSize: 13, color: C.muted },
-
-  reminderBtn: {
-    backgroundColor: C.black,
-    borderRadius: 10,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  reminderBtnText: { fontSize: 15, fontWeight: '700', color: C.white },
 
   infoCard: {
     backgroundColor: C.cardAlt,

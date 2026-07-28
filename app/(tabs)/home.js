@@ -8,9 +8,19 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getUser, refreshMe } from '../../src/services/auth';
 import { getSessions, getNextSession, getMyEnrollments } from '../../src/services/sessions';
 import { getUserLevel, LEVELS } from '../../src/constants/levels';
+import { parseLocalDate } from '../../src/utils/date';
 import { useTheme } from '../../src/context/ThemeContext';
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+
+// Local datetime of an enrollment (session_date + session_time).
+function enrollmentDateTime(e) {
+  const d = parseLocalDate(e.session_date);
+  if (!d) return null;
+  const [h, min] = String(e.session_time || '00:00').split(':').map(Number);
+  d.setHours(h || 0, min || 0, 0, 0);
+  return d;
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -61,7 +71,7 @@ export default function HomeScreen() {
     if (u?.id) {
       try {
         const enr = await getMyEnrollments();
-        setMyEnrollments(enr);
+        setMyEnrollments(enr || []);
       } catch {}
     }
   };
@@ -79,6 +89,32 @@ export default function HomeScreen() {
   const totalSessions = user?.total_sessions || 0;
   const levelInfo = getUserLevel(totalBullets, totalSessions);
   const licenseDays = getLicenseDaysLeft(user?.weapon_license_expiry);
+
+  // "The next session": the user's own next active enrollment first;
+  // only when there is none — the school's next open session (labeled differently).
+  const now = new Date();
+  const nextEnrollment = myEnrollments
+    .filter(e => e.status !== 'cancelled')
+    .map(e => ({ e, dt: enrollmentDateTime(e) }))
+    .filter(x => x.dt && x.dt > now)
+    .sort((a, b) => a.dt - b.dt)[0]?.e || null;
+
+  const next = nextEnrollment ? {
+    title: nextEnrollment.session_title,
+    date: nextEnrollment.session_date,
+    time: nextEnrollment.session_time || '',
+    timeEnd: '',
+    location: nextEnrollment.session_location || '',
+    instructor: nextEnrollment.instructor_name || '',
+  } : nextSession ? {
+    title: nextSession.title,
+    date: nextSession.date,
+    time: nextSession.start_time,
+    timeEnd: nextSession.end_time,
+    location: nextSession.location,
+    instructor: nextSession.instructor_name,
+  } : null;
+  const nextDate = next ? parseLocalDate(next.date) : null;
 
   return (
     <>
@@ -144,23 +180,23 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Next Session */}
+      {/* Next Session — the user's own enrollment first, open session as fallback */}
       <View style={s.section}>
-        <Text style={s.sectionTitle}>האימון הבא</Text>
-        {nextSession ? (
+        <Text style={s.sectionTitle}>{nextEnrollment ? 'האימון הבא שלך' : 'האימון הפתוח הקרוב'}</Text>
+        {next && nextDate ? (
           <View style={s.nextCard}>
             <View style={s.nextCardRight}>
-              <Text style={s.nextTitle}>{nextSession.title}</Text>
+              <Text style={s.nextTitle}>{next.title}</Text>
               <Text style={s.nextMeta}>
-                יום {DAY_NAMES[new Date(nextSession.date).getDay()]} | {nextSession.start_time} - {nextSession.end_time}
+                יום {DAY_NAMES[nextDate.getDay()]} | {next.time}{next.timeEnd ? ` - ${next.timeEnd}` : ''}
               </Text>
-              <Text style={s.nextMeta}>{nextSession.location}</Text>
-              <Text style={s.nextInstructor}>{nextSession.instructor_name}</Text>
+              {next.location ? <Text style={s.nextMeta}>{next.location}</Text> : null}
+              {next.instructor ? <Text style={s.nextInstructor}>{next.instructor}</Text> : null}
             </View>
             <View style={s.nextCardLeft}>
-              <Text style={s.nextDay}>{new Date(nextSession.date).getDate()}</Text>
+              <Text style={s.nextDay}>{nextDate.getDate()}</Text>
               <Text style={s.nextMonth}>
-                {new Date(nextSession.date).toLocaleDateString('he-IL', { month: 'short' })}
+                {nextDate.toLocaleDateString('he-IL', { month: 'short' })}
               </Text>
             </View>
           </View>

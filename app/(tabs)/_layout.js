@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, tabIcon } from '../../src/context/ThemeContext';
 
@@ -15,12 +16,18 @@ function HomeButton({ focused, C, iconSet }) {
 export default function TabsLayout() {
   const { C, iconSet } = useTheme();
   const s = styles(C);
+  // Respect the device's bottom safe area (home indicator / gesture bar)
+  // instead of a fixed height that fits only notched iPhones.
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: s.tabBar,
+        tabBarStyle: [
+          s.tabBar,
+          { height: 57 + insets.bottom, paddingBottom: Math.max(insets.bottom, 8) },
+        ],
         tabBarActiveTintColor: C.black,
         tabBarInactiveTintColor: C.mutedLt,
         tabBarLabelStyle: s.tabLabel,
@@ -100,8 +107,6 @@ const styles = (C) => StyleSheet.create({
     backgroundColor: C.white,
     borderTopColor: C.border,
     borderTopWidth: 1,
-    height: 85,
-    paddingBottom: 28,
     paddingTop: 8,
   },
   tabLabel: { fontSize: 11, fontWeight: '600' },

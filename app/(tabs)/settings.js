@@ -94,7 +94,7 @@ export default function SettingsScreen() {
         })}
       </View>
 
-      <Text style={s.hint}>הבחירות נשמרות אוטומטית לחשבון שלך</Text>
+      <Text style={s.hint}>ההגדרות נשמרות במכשיר הזה</Text>
     </ScrollView>
   );
 }

@@ -1,4 +1,4 @@
-import { callFunction, OFFLINE_MODE } from '../constants/api';
+import { callFunction } from '../constants/api';
 import { getToken } from './auth';
 
 /**
@@ -13,7 +13,6 @@ function serverError(result, fallback) {
 
 /** Shop catalog: products + owned/pending flags for this customer. */
 export async function getProducts() {
-  if (OFFLINE_MODE) return [];
   const token = await getToken();
   if (!token) throw new Error('יש להתחבר מחדש');
   const result = await callFunction('mobileAppApi', { action: 'getProducts', token });
@@ -26,9 +25,6 @@ export async function getProducts() {
  * Returns { subscriptions, pending_requests, late_cancel_count, no_show_count }.
  */
 export async function getMySubscription() {
-  if (OFFLINE_MODE) {
-    return { subscriptions: [], pending_requests: [], late_cancel_count: 0, no_show_count: 0 };
-  }
   const token = await getToken();
   if (!token) throw new Error('יש להתחבר מחדש');
   const result = await callFunction('mobileAppApi', { action: 'getMySubscription', token });

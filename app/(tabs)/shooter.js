@@ -85,6 +85,7 @@ export default function ShooterScreen() {
           carry_pouch: !!eq.carry_pouch,
           mag_pouch: !!eq.mag_pouch,
           id_cap: !!eq.id_cap,
+          conversion_kit: !!eq.conversion_kit,
         });
       }
       setLoading(false);

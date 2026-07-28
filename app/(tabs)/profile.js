@@ -9,6 +9,33 @@ import { getUser, refreshMe, updateProfile, logout } from '../../src/services/au
 import { getUserLevel } from '../../src/constants/levels';
 import { useTheme } from '../../src/context/ThemeContext';
 
+// Preferred training day — the server stores an English enum
+// (Customer.preferred_training_day: sunday..saturday) and returns it as
+// preferred_day. Display Hebrew, store English.
+const TRAINING_DAYS = [
+  { value: 'sunday', label: 'ראשון' },
+  { value: 'monday', label: 'שני' },
+  { value: 'tuesday', label: 'שלישי' },
+  { value: 'wednesday', label: 'רביעי' },
+  { value: 'thursday', label: 'חמישי' },
+  { value: 'friday', label: 'שישי' },
+  { value: 'saturday', label: 'שבת' },
+];
+
+// Accepts an English enum value (or a legacy Hebrew label) → enum value or ''.
+function normalizeDay(v) {
+  if (!v) return '';
+  const raw = String(v).trim().toLowerCase();
+  const byValue = TRAINING_DAYS.find(d => d.value === raw);
+  if (byValue) return byValue.value;
+  const byLabel = TRAINING_DAYS.find(d => d.label === String(v).trim());
+  return byLabel ? byLabel.value : '';
+}
+
+function dayLabel(value) {
+  return TRAINING_DAYS.find(d => d.value === value)?.label || null;
+}
+
 export default function ProfileScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
@@ -29,7 +56,7 @@ export default function ProfileScreen() {
     if (u) {
       setEditName(u.full_name || '');
       setEditEmail(u.email || '');
-      setEditDay(u.preferred_day || '');
+      setEditDay(normalizeDay(u.preferred_day));
     }
   };
 
@@ -47,11 +74,14 @@ export default function ProfileScreen() {
       return;
     }
     try {
-      const updated = await updateProfile({
+      const payload = {
         full_name: editName.trim(),
         email: editEmail.trim(),
-        preferred_day: editDay.trim(),
-      });
+      };
+      // The server writes preferred_day into an enum field — omit it entirely
+      // when nothing is selected (an empty string would fail validation).
+      if (editDay) payload.preferred_day = editDay;
+      const updated = await updateProfile(payload);
       setUser(updated);
       setEditing(false);
       Alert.alert('נשמר', 'הפרטים עודכנו במערכת');
@@ -166,16 +196,23 @@ export default function ProfileScreen() {
         <View style={s.fieldCard}>
           <Text style={s.fieldLabel}>יום אימון מועדף</Text>
           {editing ? (
-            <TextInput
-              style={s.fieldInput}
-              value={editDay}
-              onChangeText={setEditDay}
-              textAlign="right"
-              placeholder="למשל: ראשון"
-              placeholderTextColor={C.mutedLt}
-            />
+            <View style={s.dayChips}>
+              {TRAINING_DAYS.map(d => {
+                const active = editDay === d.value;
+                return (
+                  <TouchableOpacity
+                    key={d.value}
+                    style={[s.dayChip, active && s.dayChipActive]}
+                    onPress={() => setEditDay(active ? '' : d.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.dayChipText, active && s.dayChipTextActive]}>{d.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           ) : (
-            <Text style={s.fieldValue}>{user.preferred_day || 'לא נבחר'}</Text>
+            <Text style={s.fieldValue}>{dayLabel(normalizeDay(user.preferred_day)) || 'לא נבחר'}</Text>
           )}
         </View>
 
@@ -186,7 +223,7 @@ export default function ProfileScreen() {
               setEditing(false);
               setEditName(user.full_name || '');
               setEditEmail(user.email || '');
-              setEditDay(user.preferred_day || '');
+              setEditDay(normalizeDay(user.preferred_day));
             }}
           >
             <Text style={s.cancelEditText}>ביטול עריכה</Text>
@@ -290,6 +327,24 @@ const makeStyles = (C) => StyleSheet.create({
     borderWidth: 1, borderColor: C.border,
     borderRadius: 8, padding: 10,
   },
+
+  dayChips: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  dayChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.bg,
+  },
+  dayChipActive: { backgroundColor: C.black, borderColor: C.black },
+  dayChipText: { fontSize: 13, fontWeight: '600', color: C.text },
+  dayChipTextActive: { color: C.white },
 
   cancelEditBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 4 },
   cancelEditText: { fontSize: 13, color: C.muted, textDecorationLine: 'underline' },

@@ -6,6 +6,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getMyEnrollments, cancelEnrollment } from '../../src/services/sessions';
+import { parseLocalDate } from '../../src/utils/date';
 import { useTheme } from '../../src/context/ThemeContext';
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -15,13 +16,17 @@ export default function RegistrationsScreen() {
   const s = makeStyles(C);
   const [enrollments, setEnrollments] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
     try {
       const enr = await getMyEnrollments();
-      setEnrollments(enr);
-    } catch {}
+      setEnrollments(enr || []);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    }
     setLoaded(true);
   };
 
@@ -82,7 +87,16 @@ export default function RegistrationsScreen() {
     >
       <Text style={s.title}>ההרשמות שלי</Text>
 
-      {loaded && enrollments.length === 0 ? (
+      {/* Fetch failed and there is nothing to show → error + retry (not "empty") */}
+      {loaded && loadError && enrollments.length === 0 ? (
+        <View style={s.emptyCard}>
+          <Ionicons name="cloud-offline-outline" size={32} color={C.mutedLt} />
+          <Text style={s.emptyText}>לא הצלחנו לטעון את ההרשמות</Text>
+          <TouchableOpacity style={s.retryBtn} onPress={loadData} activeOpacity={0.7}>
+            <Text style={s.retryBtnText}>נסה שוב</Text>
+          </TouchableOpacity>
+        </View>
+      ) : loaded && enrollments.length === 0 ? (
         <View style={s.emptyCard}>
           <Ionicons name="calendar-outline" size={32} color={C.mutedLt} />
           <Text style={s.emptyText}>אין הרשמות פעילות</Text>
@@ -92,7 +106,7 @@ export default function RegistrationsScreen() {
         </View>
       ) : (
         enrollments.map(e => {
-          const d = e.session_date ? new Date(e.session_date) : null;
+          const d = parseLocalDate(e.session_date);
           return (
             <View key={e.id} style={s.card}>
               <View style={s.cardDate}>
@@ -146,6 +160,11 @@ const makeStyles = (C) => StyleSheet.create({
   },
   emptyText: { fontSize: 14, color: C.muted },
   emptyLink: { fontSize: 14, color: C.text, fontWeight: '700', textDecorationLine: 'underline' },
+  retryBtn: {
+    backgroundColor: C.black, borderRadius: 10,
+    paddingHorizontal: 24, paddingVertical: 10, marginTop: 4,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: C.white },
 
   card: {
     flexDirection: 'row-reverse',

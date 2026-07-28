@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert,
@@ -6,34 +6,97 @@ import {
 import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { getMySubscription } from '../src/services/subscription';
 import { useTheme } from '../src/context/ThemeContext';
 
 // דף התשלום של גרואו מוטמע בתוך האפליקציה (החלטת אלעד 13/07) — לא נפתח
 // דפדפן חיצוני ולא גיליון דפדפן. פתיחת המנוי עצמה קורית בשרת דרך
 // growSubscriptionWebhook; המסך הזה רק מארח את דף הסליקה ומחזיר לחנות.
+// מילות מפתח בכתובת הן רק רמז — אישור הצלחה אמיתי מגיע מבדיקה מול השרת
+// (getMySubscription) שהמנוי או הבקשה אכן נוצרו.
 const SUCCESS_HINTS = [
   'success', 'thank', 'approved', 'confirmation', 'paymentsuccess', 'completed',
 ];
+
+const VERIFY_ATTEMPTS = 3;
+const VERIFY_DELAY_MS = 2500;
 
 export default function PaymentScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
   const router = useRouter();
   const { url, name } = useLocalSearchParams();
-  const [paid, setPaid] = useState(false);
+  // idle → checking → confirmed | unknown
+  const [status, setStatus] = useState('idle');
+  // The user chose to leave the payment page — show the status view instead
+  const [exiting, setExiting] = useState(false);
   const [failed, setFailed] = useState(false);
   const webRef = useRef(null);
+  const baselineRef = useRef(null);
+  const checkingRef = useRef(false);
+  const confirmedRef = useRef(false);
 
-  const detectSuccess = useCallback((navState) => {
-    const u = String(navState?.url || '').toLowerCase();
-    if (SUCCESS_HINTS.some((h) => u.includes(h))) setPaid(true);
+  // Snapshot how many subscriptions/pending requests existed BEFORE the
+  // payment, so "success" means something new actually appeared.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const d = await getMySubscription();
+        if (alive) {
+          baselineRef.current =
+            (d.subscriptions?.length || 0) + (d.pending_requests?.length || 0);
+        }
+      } catch {
+        // Baseline unknown — any entitlement found later counts as success
+      }
+    })();
+    return () => { alive = false; };
   }, []);
 
+  const verifyPayment = async () => {
+    if (checkingRef.current || confirmedRef.current) return;
+    checkingRef.current = true;
+    setStatus('checking');
+    const baseline = baselineRef.current;
+    for (let attempt = 0; attempt < VERIFY_ATTEMPTS; attempt++) {
+      try {
+        const d = await getMySubscription();
+        const count =
+          (d.subscriptions?.length || 0) + (d.pending_requests?.length || 0);
+        if (baseline == null ? count > 0 : count > baseline) {
+          confirmedRef.current = true;
+          checkingRef.current = false;
+          setStatus('confirmed');
+          return;
+        }
+      } catch {}
+      if (attempt < VERIFY_ATTEMPTS - 1) {
+        await new Promise(r => setTimeout(r, VERIFY_DELAY_MS));
+      }
+    }
+    checkingRef.current = false;
+    setStatus('unknown');
+  };
+
+  const detectSuccess = (navState) => {
+    const u = String(navState?.url || '').toLowerCase();
+    if (SUCCESS_HINTS.some((h) => u.includes(h))) verifyPayment();
+  };
+
   const close = () => {
-    if (paid) { router.back(); return; }
-    Alert.alert('יציאה מדף התשלום', 'לצאת בלי להשלים את התשלום?', [
+    // Verification already finished (or the status view is showing) — just leave
+    if (status === 'confirmed' || status === 'unknown' || exiting) {
+      router.back();
+      return;
+    }
+    Alert.alert('יציאה מדף התשלום', 'לצאת מדף התשלום? נבדוק אם התשלום נקלט.', [
       { text: 'להישאר', style: 'cancel' },
-      { text: 'יציאה', style: 'destructive', onPress: () => router.back() },
+      {
+        text: 'יציאה',
+        style: 'destructive',
+        onPress: () => { setExiting(true); verifyPayment(); },
+      },
     ]);
   };
 
@@ -64,8 +127,35 @@ export default function PaymentScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Payment page, embedded */}
-      {failed ? (
+      {/* Status view after the user left the payment page */}
+      {exiting ? (
+        <View style={s.center}>
+          {status === 'confirmed' ? (
+            <>
+              <Ionicons name="checkmark-circle" size={44} color={C.ok} />
+              <Text style={s.errTitle}>התשלום נקלט!</Text>
+              <Text style={s.errText}>המנוי מופיע בחשבון שלך במסך "המנוי שלי".</Text>
+              <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+                <Text style={s.backBtnText}>חזרה לחנות</Text>
+              </TouchableOpacity>
+            </>
+          ) : status === 'unknown' ? (
+            <>
+              <Ionicons name="time-outline" size={44} color={C.muted} />
+              <Text style={s.errTitle}>לא זוהה עדיין תשלום חדש</Text>
+              <Text style={s.errText}>אם השלמת תשלום, המנוי יופיע תוך דקות.</Text>
+              <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+                <Text style={s.backBtnText}>חזרה לחנות</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <ActivityIndicator size="large" color={C.black} />
+              <Text style={s.errTitle}>בודקים את סטטוס התשלום…</Text>
+            </>
+          )}
+        </View>
+      ) : failed ? (
         <View style={s.center}>
           <Ionicons name="cloud-offline-outline" size={40} color={C.muted} />
           <Text style={s.errTitle}>דף התשלום לא נטען</Text>
@@ -94,16 +184,27 @@ export default function PaymentScreen() {
         />
       )}
 
-      {/* Success banner — the webhook opens the membership server-side */}
-      {paid && (
+      {/* Bottom bars while still on the payment page */}
+      {!exiting && status === 'checking' && (
+        <View style={s.checkBar}>
+          <ActivityIndicator size="small" color={C.text} />
+          <Text style={s.checkText}>מאמתים את התשלום מול השרת…</Text>
+        </View>
+      )}
+      {!exiting && status === 'confirmed' && (
         <View style={s.paidBar}>
           <View style={s.paidTextWrap}>
-            <Text style={s.paidTitle}>התשלום התקבל!</Text>
-            <Text style={s.paidText}>המנוי ייפתח אוטומטית תוך רגע ותתקבל הודעת וואטסאפ.</Text>
+            <Text style={s.paidTitle}>התשלום נקלט!</Text>
+            <Text style={s.paidText}>המנוי מופיע בחשבון שלך ותתקבל הודעת וואטסאפ.</Text>
           </View>
           <TouchableOpacity style={s.paidBtn} onPress={() => router.back()}>
             <Text style={s.paidBtnText}>חזרה לחנות</Text>
           </TouchableOpacity>
+        </View>
+      )}
+      {!exiting && status === 'unknown' && (
+        <View style={s.pendingBar}>
+          <Text style={s.pendingText}>אם השלמת תשלום, המנוי יופיע תוך דקות.</Text>
         </View>
       )}
     </View>
@@ -146,6 +247,19 @@ const makeStyles = (C) => StyleSheet.create({
   },
   backBtnText: { fontSize: 14, fontWeight: '700', color: C.white },
 
+  checkBar: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 14,
+    paddingBottom: 26,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.cardAlt,
+  },
+  checkText: { fontSize: 13, fontWeight: '600', color: C.textSecondary },
+
   paidBar: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -164,4 +278,13 @@ const makeStyles = (C) => StyleSheet.create({
     paddingVertical: 10, paddingHorizontal: 16,
   },
   paidBtnText: { fontSize: 13, fontWeight: '700', color: C.white },
+
+  pendingBar: {
+    padding: 14,
+    paddingBottom: 26,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.warnLt,
+  },
+  pendingText: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'center' },
 });

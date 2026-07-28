@@ -25,14 +25,16 @@ export default function SubscriptionScreen() {
   const s = makeStyles(C);
   const [data, setData] = useState(EMPTY);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState(null);
 
   const loadData = async () => {
     try {
       setData(await getMySubscription());
-    } catch (e) {
-      if (!loaded) Alert.alert('שגיאה בטעינת המנוי', e.message);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
     }
     setLoaded(true);
   };
@@ -77,6 +79,18 @@ export default function SubscriptionScreen() {
       {!loaded ? (
         <View style={s.emptyCard}>
           <ActivityIndicator size="large" color={C.black} />
+        </View>
+      ) : loadError && isEmpty ? (
+        /* Fetch failed → error + retry, not the "no subscription" message */
+        <View style={s.emptyCard}>
+          <View style={s.iconWrap}>
+            <Ionicons name="cloud-offline-outline" size={34} color={C.white} />
+          </View>
+          <Text style={s.emptyTitle}>לא הצלחנו לטעון את המנוי</Text>
+          <Text style={s.emptyText}>בדקו את החיבור לאינטרנט ונסו שוב.</Text>
+          <TouchableOpacity style={s.shopBtn} onPress={loadData} activeOpacity={0.7}>
+            <Text style={s.shopBtnText}>נסה שוב</Text>
+          </TouchableOpacity>
         </View>
       ) : isEmpty ? (
         <View style={s.emptyCard}>

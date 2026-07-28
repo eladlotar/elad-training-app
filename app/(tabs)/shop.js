@@ -26,14 +26,16 @@ export default function ShopScreen() {
   const router = useRouter();
   const [products, setProducts] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState(null);
 
   const loadData = async () => {
     try {
       setProducts(await getProducts());
-    } catch (e) {
-      if (!loaded) Alert.alert('שגיאה בטעינת החנות', e.message);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
     }
     setLoaded(true);
   };
@@ -190,6 +192,18 @@ export default function ShopScreen() {
         <View style={s.emptyCard}>
           <ActivityIndicator size="large" color={C.black} />
         </View>
+      ) : loadError && products.length === 0 ? (
+        /* Fetch failed → error + retry, not the "shop is empty" message */
+        <View style={s.emptyCard}>
+          <View style={s.iconWrap}>
+            <Ionicons name="cloud-offline-outline" size={34} color={C.white} />
+          </View>
+          <Text style={s.emptyTitle}>לא הצלחנו לטעון את החנות</Text>
+          <Text style={s.emptyText}>בדקו את החיבור לאינטרנט ונסו שוב.</Text>
+          <TouchableOpacity style={s.retryBtn} onPress={loadData} activeOpacity={0.7}>
+            <Text style={s.retryBtnText}>נסה שוב</Text>
+          </TouchableOpacity>
+        </View>
       ) : products.length === 0 ? (
         <View style={s.emptyCard}>
           <View style={s.iconWrap}>
@@ -306,4 +320,9 @@ const makeStyles = (C) => StyleSheet.create({
   iconWrap: { width: 68, height: 68, borderRadius: 34, backgroundColor: C.black, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: C.text },
   emptyText: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 21 },
+  retryBtn: {
+    backgroundColor: C.black, borderRadius: 10,
+    paddingHorizontal: 24, paddingVertical: 11, marginTop: 6,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: C.white },
 });
