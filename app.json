@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Elad Lotar",
+    "name": "מרכז הנשק",
     "slug": "elad-training-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,9 +15,11 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.elad.training",
+      "bundleIdentifier": "com.eladlotar.training",
+      "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDisplayName": "מרכז הנשק"
       }
     },
     "android": {
@@ -26,7 +28,7 @@
         "backgroundColor": "#3F4A2E"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.elad.training"
+      "package": "com.eladlotar.training"
     },
     "web": {
       "favicon": "./assets/favicon.png"
