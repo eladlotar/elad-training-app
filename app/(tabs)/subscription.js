@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Alert, ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -23,6 +24,7 @@ function paymentBadge(status, C) {
 export default function SubscriptionScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const [data, setData] = useState(EMPTY);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -71,7 +73,7 @@ export default function SubscriptionScreen() {
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       <Text style={s.title}>המנוי שלי</Text>
@@ -214,7 +216,7 @@ export default function SubscriptionScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40, flexGrow: 1 },
+  content: { padding: 20, paddingBottom: 40, flexGrow: 1 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', marginBottom: 16 },
 
   section: { marginBottom: 8 },
@@ -281,7 +283,7 @@ const makeStyles = (C) => StyleSheet.create({
   pendingMeta: { fontSize: 12, color: C.muted, marginTop: 3 },
   pendingCancelBtn: {
     borderWidth: 1, borderColor: C.err, borderRadius: 8,
-    paddingHorizontal: 14, paddingVertical: 7, minWidth: 60, alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 12, minWidth: 60, alignItems: 'center',
   },
   pendingCancelText: { fontSize: 12, fontWeight: '700', color: C.err },
 

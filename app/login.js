@@ -4,11 +4,13 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform,
   Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { requestOtp, verifyOtp, registerUser } from '../src/services/auth';
 import { C } from '../src/constants/theme';
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -94,7 +96,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
-        contentContainerStyle={s.inner}
+        contentContainerStyle={[s.inner, { paddingTop: Math.max(insets.top + 16, 40) }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

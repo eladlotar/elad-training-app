@@ -116,7 +116,30 @@ export async function updateShooterProfile(fields) {
   return result.customer;
 }
 
+/**
+ * Permanently delete the account (Apple guideline 5.1.1(v)).
+ * The server scrubs identifying details, revokes every session and drops the
+ * phone number, so the account cannot be signed into again. Local storage is
+ * cleared afterwards regardless, so the app never sits in a half-deleted state.
+ */
+export async function deleteAccount() {
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
+  const result = await callFunction('mobileAppApi', { action: 'deleteAccount', token });
+  if (!result.ok) throw new Error(result.error || 'מחיקת החשבון נכשלה');
+  await AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY, OTP_KEY]);
+  return true;
+}
+
 export async function logout() {
+  // Revoke the session server-side FIRST. Without this the 90-day token stays
+  // valid even after the user signs out, so a sold or handed-down phone keeps
+  // full access to the account. Best-effort: a network failure must never trap
+  // the user in a signed-in state, so we still clear local storage below.
+  try {
+    const token = await getToken();
+    if (token) await callFunction('mobileAppApi', { action: 'logout', token });
+  } catch {}
   await AsyncStorage.removeItem(USER_KEY);
   await AsyncStorage.removeItem(TOKEN_KEY);
   await AsyncStorage.removeItem(OTP_KEY);

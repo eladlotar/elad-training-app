@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/context/ThemeContext';
@@ -76,11 +77,12 @@ const SECTIONS = [
 export default function TermsScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   return (
     <View style={s.container}>
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <View style={s.headerText}>
           <Text style={s.headerTitle}>תקנון מנויי ירי</Text>
           <Text style={s.headerSub}>ELAD — בית ספר ללוחמה בטרור</Text>
@@ -114,7 +116,6 @@ const makeStyles = (C) => StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 58,
     paddingBottom: 14,
     paddingHorizontal: 20,
     borderBottomWidth: 1,

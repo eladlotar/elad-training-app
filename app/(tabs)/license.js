@@ -2,20 +2,29 @@ import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import { getUser } from '../../src/services/auth';
+import { getUser, refreshMe } from '../../src/services/auth';
 import { parseLocalDate } from '../../src/utils/date';
 import { useTheme } from '../../src/context/ThemeContext';
 
 export default function LicenseScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
-    const u = await getUser();
-    setUser(u);
+    // Cache first so the screen paints immediately, then refresh from the
+    // server — without this, a licence updated in the CRM never showed up here
+    // and "pull to refresh" silently did nothing.
+    const cached = await getUser();
+    if (cached) setUser(cached);
+    try {
+      const fresh = await refreshMe();
+      if (fresh) setUser(fresh);
+    } catch {}
   };
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
@@ -30,20 +39,24 @@ export default function LicenseScreen() {
   const now = new Date();
   const diffDays = expiry ? Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)) : null;
 
-  let statusColor = C.ok;
-  let statusBg = C.okLt;
-  let statusText = 'תקין';
+  // ברירת המחדל היא "חסר מידע" ולא "תקין": מתאמן שטרם מילא תוקף רישיון קיבל
+  // תג ירוק שאומר שהרישיון שלו בסדר — מידע שגוי בבית ספר שההשתתפות בו
+  // מותנית ברישיון בתוקף.
+  let statusColor = C.muted;
+  let statusBg = C.cardAlt;
+  let statusText = 'חסר מידע';
   if (diffDays !== null) {
     if (diffDays < 0) { statusColor = C.err; statusBg = C.errLt; statusText = 'פג תוקף'; }
     else if (diffDays <= 7) { statusColor = C.err; statusBg = C.errLt; statusText = 'קריטי'; }
     else if (diffDays <= 30) { statusColor = C.warn; statusBg = C.warnLt; statusText = 'פג בקרוב'; }
     else if (diffDays <= 60) { statusColor = C.warn; statusBg = C.warnLt; statusText = 'שים לב'; }
+    else { statusColor = C.ok; statusBg = C.okLt; statusText = 'תקין'; }
   }
 
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       <Text style={s.title}>רישיון נשק</Text>
@@ -71,20 +84,20 @@ export default function LicenseScreen() {
         <Text style={s.sectionTitle}>פרטי רישיון</Text>
 
         <View style={s.row}>
-          <Text style={s.rowValue}>{user?.license_type || 'לא הוזן'}</Text>
           <Text style={s.rowLabel}>סוג רישיון</Text>
+          <Text style={s.rowValue}>{user?.license_type || 'לא הוזן'}</Text>
         </View>
 
         <View style={s.row}>
+          <Text style={s.rowLabel}>תאריך פקיעה</Text>
           <Text style={s.rowValue}>
             {expiry ? expiry.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }) : 'לא הוזן'}
           </Text>
-          <Text style={s.rowLabel}>תאריך פקיעה</Text>
         </View>
 
         <View style={s.row}>
-          <Text style={s.rowValue}>{user?.full_name || '-'}</Text>
           <Text style={s.rowLabel}>שם בעל הרישיון</Text>
+          <Text style={s.rowValue}>{user?.full_name || '-'}</Text>
         </View>
       </View>
 
@@ -105,7 +118,7 @@ export default function LicenseScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
+  content: { padding: 20, paddingBottom: 40 },
 
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', marginBottom: 20 },
 

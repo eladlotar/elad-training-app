@@ -2,7 +2,9 @@ import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Image, Alert, Modal, TextInput, ActivityIndicator, Dimensions,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +19,9 @@ const metaKey = (uid) => `elad_folder_${uid || 'guest'}`;
 const COLS = 2;
 const GAP = 12;
 const SCREEN_W = Dimensions.get('window').width;
+// Percentage heights are unreliable inside a ScrollView content container,
+// so the viewer image is capped against the real window height instead.
+const SCREEN_H = Dimensions.get('window').height;
 const THUMB = (SCREEN_W - 40 - GAP) / COLS;
 
 function nowStamp() {
@@ -28,6 +33,7 @@ function nowStamp() {
 export default function FolderScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const [uid, setUid] = useState('guest');
   const [docs, setDocs] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -114,7 +120,7 @@ export default function FolderScreen() {
 
   return (
     <>
-      <ScrollView style={s.container} contentContainerStyle={s.content}>
+      <ScrollView style={s.container} contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}>
         <Text style={s.title}>התיקייה שלי</Text>
         <Text style={s.sub}>אסמכתאות ריענון, קבלות ומסמכים מהמטווח — נשמרים אצלך ({docs.length}/{MAX_DOCS})</Text>
 
@@ -157,12 +163,29 @@ export default function FolderScreen() {
       {/* Viewer modal */}
       <Modal visible={!!viewDoc} animationType="slide" onRequestClose={() => setViewDoc(null)}>
         {viewDoc && (
-          <View style={s.viewer}>
+          <KeyboardAvoidingView
+            style={[s.viewer, { paddingTop: insets.top + 8 }]}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
             <View style={s.viewerBar}>
-              <TouchableOpacity onPress={() => setViewDoc(null)}><Ionicons name="close" size={28} color={C.text} /></TouchableOpacity>
-              <TouchableOpacity onPress={deleteDoc}><Ionicons name="trash-outline" size={24} color={C.err} /></TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setViewDoc(null)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={28} color={C.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={deleteDoc}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 16 }}
+              >
+                <Ionicons name="trash-outline" size={24} color={C.err} />
+              </TouchableOpacity>
             </View>
-            <ScrollView contentContainerStyle={s.viewerBody}>
+            <ScrollView
+              contentContainerStyle={s.viewerBody}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               <Image source={{ uri: viewDoc.uri }} style={s.viewerImg} resizeMode="contain" />
               <Text style={s.viewerDate}>נשמר: {viewDoc.createdLabel}</Text>
               <Text style={s.viewerLabel}>כותרת</Text>
@@ -172,7 +195,7 @@ export default function FolderScreen() {
                 <Text style={s.viewerSaveText}>שמירת כותרת</Text>
               </TouchableOpacity>
             </ScrollView>
-          </View>
+          </KeyboardAvoidingView>
         )}
       </Modal>
     </>
@@ -181,7 +204,7 @@ export default function FolderScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
+  content: { padding: 20, paddingBottom: 40 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right' },
   sub: { fontSize: 13, color: C.muted, textAlign: 'right', marginTop: 4, marginBottom: 18 },
 
@@ -202,10 +225,10 @@ const makeStyles = (C) => StyleSheet.create({
   thumbTitle: { fontSize: 12, fontWeight: '700', color: C.text, width: '100%', textAlign: 'right' },
   thumbDate: { fontSize: 10, color: C.muted, marginTop: 2 },
 
-  viewer: { flex: 1, backgroundColor: C.bg, paddingTop: 50 },
+  viewer: { flex: 1, backgroundColor: C.bg },
   viewerBar: { flexDirection: 'row-reverse', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 10 },
   viewerBody: { padding: 20 },
-  viewerImg: { width: '100%', height: 360, borderRadius: 12, backgroundColor: C.cardAlt },
+  viewerImg: { width: '100%', height: Math.round(SCREEN_H * 0.42), borderRadius: 12, backgroundColor: C.cardAlt },
   viewerDate: { fontSize: 12, color: C.muted, textAlign: 'right', marginTop: 12 },
   viewerLabel: { fontSize: 13, fontWeight: '700', color: C.textSecondary, textAlign: 'right', marginTop: 16, marginBottom: 6 },
   viewerInput: { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text },

@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Alert, ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +14,6 @@ import {
   getSessionsByDate,
   getSessionDates,
   enrollInSession,
-  getMyEnrollments,
   cancelEnrollment,
 } from '../../src/services/sessions';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -31,6 +31,7 @@ function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); retu
 export default function SessionsScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const today = new Date();
   const todayStr = dateToStr(today);
 
@@ -42,7 +43,6 @@ export default function SessionsScreen() {
 
   const [sessionsByDate, setSessionsByDate] = useState({});
   const [sessionDates, setSessionDates] = useState([]);
-  const [enrollments, setEnrollments] = useState([]);
   const [user, setUser] = useState(null);
   const [enrolling, setEnrolling] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,9 +62,6 @@ export default function SessionsScreen() {
     }
     setSessionsByDate(getSessionsByDate());
     setSessionDates(getSessionDates());
-    if (u?.id) {
-      try { setEnrollments(await getMyEnrollments()); } catch {}
-    }
   };
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
@@ -87,7 +84,6 @@ export default function SessionsScreen() {
 
   const sessionDateSet = useMemo(() => new Set(sessionDates), [sessionDates]);
   const daySessions = sessionsByDate[selectedDate] || [];
-  const enrolledSessionIds = new Set(enrollments.map(e => e.session_id));
 
   const BLOCK_MSG = {
     profile_incomplete: 'יש להשלים פרטי יורה (ת"ז, רישיון, מספר כלי) לפני הרשמה.',
@@ -95,6 +91,9 @@ export default function SessionsScreen() {
     no_credit: 'נגמרו הקרדיטים במנוי שלך. לחידוש פנה אלינו.',
     debt: 'יש חוב פתוח על המנוי. יש להסדיר תשלום מול בית הספר.',
     quota_exceeded: 'ניצלת את מכסת האימונים החודשית במנוי.',
+    // חוק תדירות במנוי (נוסף 03/08/2026). ההודעה המדויקת עם המספרים
+    // מגיעה מהשרת בכשל הרשמה; כאן זו החסימה המוקדמת מתוך היומן.
+    rule_limit: 'המנוי שלך מגביל את מספר ההרשמות לאימון מהסוג הזה בתקופה הזו.',
     inactive: 'החשבון אינו פעיל כרגע. פנה אלינו.',
     full: 'האימון מלא.',
   };
@@ -202,7 +201,7 @@ export default function SessionsScreen() {
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       <Text style={s.title}>אימונים</Text>
@@ -319,9 +318,16 @@ export default function SessionsScreen() {
           daySessions.map(session => {
             const isFull = session.status === 'full' || session.enrolled_count >= session.max_participants;
             const spotsLeft = session.max_participants - session.enrolled_count;
-            const isEnrolled = enrolledSessionIds.has(session.id);
             const isLoading = enrolling === session.id;
-            const enrollment = enrollments.find(e => e.session_id === session.id);
+            // Registration state comes from the server, which already resolves
+            // series registrations (one participant row covers every meeting).
+            // Recomputing it here from getMyEnrollments missed meetings 2+.
+            const isEnrolled = !!session.is_registered;
+            const enrollment = session.participant_id
+              ? { id: session.participant_id, session_title: session.title }
+              : null;
+            // Courses are sold through the school, not self-service in the app.
+            const isCourse = session.type === 'course';
 
             return (
               <View key={session.id} style={[s.card, isFull && !isEnrolled && s.cardFull]}>
@@ -342,7 +348,11 @@ export default function SessionsScreen() {
                         {isFull ? 'מלא' : spotsLeft === 1 ? 'מקום אחרון!' : spotsLeft === 2 ? 'נשארו 2 מקומות' : ''}
                       </Text>
                     </View>
-                    {isEnrolled ? (
+                    {isCourse ? (
+                      <Text style={s.courseNote}>
+                        {isEnrolled ? 'רשום לקורס' : 'הרשמה מול בית הספר'}
+                      </Text>
+                    ) : isEnrolled ? (
                       <TouchableOpacity style={s.cancelBtn} onPress={() => handleCancel(enrollment)} activeOpacity={0.7}>
                         <Text style={s.cancelBtnText}>ביטול</Text>
                       </TouchableOpacity>
@@ -369,7 +379,7 @@ export default function SessionsScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { paddingTop: 60, paddingBottom: 40 },
+  content: { paddingBottom: 40 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', paddingHorizontal: 20, marginBottom: 16 },
 
   // Segmented view selector
@@ -395,7 +405,7 @@ const makeStyles = (C) => StyleSheet.create({
     marginBottom: 14,
   },
   rowNavTitle: { fontSize: 15, fontWeight: '700', color: C.text },
-  navBtn: { padding: 6 },
+  navBtn: { padding: 12 },
 
   // Month
   monthWrap: { paddingHorizontal: 16, marginBottom: 6 },
@@ -456,4 +466,5 @@ const makeStyles = (C) => StyleSheet.create({
   enrollBtnTextFull: { color: C.muted },
   cancelBtn: { backgroundColor: C.bg, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.err },
   cancelBtnText: { fontSize: 13, fontWeight: '700', color: C.err },
+  courseNote: { fontSize: 12.5, fontWeight: '600', color: C.muted, paddingVertical: 8 },
 });

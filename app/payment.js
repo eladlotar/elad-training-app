@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,7 @@ const VERIFY_DELAY_MS = 2500;
 export default function PaymentScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { url, name } = useLocalSearchParams();
   // idle → checking → confirmed | unknown
@@ -115,7 +117,7 @@ export default function PaymentScreen() {
   return (
     <View style={s.container}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <View style={s.headerText}>
           <Text style={s.headerTitle} numberOfLines={1}>{name || 'תשלום מאובטח'}</Text>
           <View style={s.secureRow}>
@@ -187,13 +189,13 @@ export default function PaymentScreen() {
 
       {/* Bottom bars while still on the payment page */}
       {!exiting && status === 'checking' && (
-        <View style={s.checkBar}>
+        <View style={[s.checkBar, { paddingBottom: insets.bottom + 14 }]}>
           <ActivityIndicator size="small" color={C.text} />
           <Text style={s.checkText}>מאמתים את התשלום מול השרת…</Text>
         </View>
       )}
       {!exiting && status === 'confirmed' && (
-        <View style={s.paidBar}>
+        <View style={[s.paidBar, { paddingBottom: insets.bottom + 16 }]}>
           <View style={s.paidTextWrap}>
             <Text style={s.paidTitle}>התשלום נקלט!</Text>
             <Text style={s.paidText}>המנוי מופיע בחשבון שלך ותתקבל הודעת וואטסאפ.</Text>
@@ -204,7 +206,7 @@ export default function PaymentScreen() {
         </View>
       )}
       {!exiting && status === 'unknown' && (
-        <View style={s.pendingBar}>
+        <View style={[s.pendingBar, { paddingBottom: insets.bottom + 14 }]}>
           <Text style={s.pendingText}>אם השלמת תשלום, המנוי יופיע תוך דקות.</Text>
         </View>
       )}
@@ -218,7 +220,6 @@ const makeStyles = (C) => StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 58,
     paddingBottom: 12,
     paddingHorizontal: 18,
     borderBottomWidth: 1,
@@ -254,7 +255,6 @@ const makeStyles = (C) => StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     padding: 14,
-    paddingBottom: 26,
     borderTopWidth: 1,
     borderTopColor: C.border,
     backgroundColor: C.cardAlt,
@@ -266,7 +266,6 @@ const makeStyles = (C) => StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 16,
-    paddingBottom: 28,
     borderTopWidth: 1,
     borderTopColor: C.border,
     backgroundColor: C.okLt,
@@ -282,7 +281,6 @@ const makeStyles = (C) => StyleSheet.create({
 
   pendingBar: {
     padding: 14,
-    paddingBottom: 26,
     borderTopWidth: 1,
     borderTopColor: C.border,
     backgroundColor: C.warnLt,

@@ -1,10 +1,14 @@
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, tabIcon, ICON_SETS } from '../../src/context/ThemeContext';
 import { PALETTES } from '../../src/constants/theme';
+import { logout, deleteAccount } from '../../src/services/auth';
 
 const CAL_VIEW_KEY = 'elad_calendar_view';
 const CAL_VIEWS = [
@@ -16,7 +20,9 @@ const CAL_VIEWS = [
 export default function SettingsScreen() {
   const { C, paletteId, setPalette, iconSet, setIconSet } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const [calView, setCalView] = useState('month');
+  const [deleting, setDeleting] = useState(false);
 
   useFocusEffect(useCallback(() => {
     (async () => {
@@ -29,8 +35,53 @@ export default function SettingsScreen() {
     try { await AsyncStorage.setItem(CAL_VIEW_KEY, id); } catch {}
   };
 
+  const handleLogout = () => {
+    Alert.alert('התנתקות', 'להתנתק מהחשבון במכשיר הזה?', [
+      { text: 'ביטול', style: 'cancel' },
+      {
+        text: 'התנתקות',
+        style: 'destructive',
+        onPress: async () => { await logout(); router.replace('/login'); },
+      },
+    ]);
+  };
+
+  // Two-step confirmation — deletion is irreversible, so a single mis-tap
+  // must never be enough.
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'מחיקת חשבון',
+      'הפעולה תמחק את הפרטים האישיים שלך: תעודת זהות, פרטי רישיון הנשק, פרטי הכלי ופרטי הקשר. ' +
+      'לא תוכל להתחבר לחשבון הזה שוב.\n\n' +
+      'רישומי תשלומים וחשבוניות יישמרו כפי שהחוק מחייב.',
+      [
+        { text: 'ביטול', style: 'cancel' },
+        { text: 'להמשיך', style: 'destructive', onPress: confirmDeleteAccount },
+      ],
+    );
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert('אישור אחרון', 'למחוק את החשבון? אי אפשר לבטל את זה.', [
+      { text: 'לא למחוק', style: 'cancel' },
+      {
+        text: 'כן, למחוק',
+        style: 'destructive',
+        onPress: async () => {
+          setDeleting(true);
+          try {
+            await deleteAccount();
+            router.replace('/login');
+          } catch (e) {
+            Alert.alert('המחיקה נכשלה', e.message);
+          } finally { setDeleting(false); }
+        },
+      },
+    ]);
+  };
+
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
+    <ScrollView style={s.container} contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}>
       <Text style={s.title}>הגדרות</Text>
 
       {/* Account */}
@@ -94,6 +145,38 @@ export default function SettingsScreen() {
         })}
       </View>
 
+      {/* Privacy */}
+      <Text style={s.sectionTitle}>פרטיות</Text>
+      <View style={s.group}>
+        <SettingsRow C={C} iconSet={iconSet} iconKey="license" label="מדיניות פרטיות"
+          note="אילו נתונים נאספים ולמה" onPress={() => router.push('/privacy')} />
+        <View style={s.divider} />
+        <SettingsRow C={C} iconSet={iconSet} iconKey="license" label="תקנון"
+          note="תנאי השתתפות, תשלומים וביטולים" onPress={() => router.push('/terms')} />
+      </View>
+
+      {/* Account actions — destructive, kept last and visually separated */}
+      <Text style={s.sectionTitle}>יציאה ומחיקה</Text>
+      <View style={s.group}>
+        <TouchableOpacity style={s.dangerRow} onPress={handleLogout} activeOpacity={0.6}>
+          <Text style={s.logoutText}>התנתקות</Text>
+        </TouchableOpacity>
+        <View style={s.divider} />
+        <TouchableOpacity
+          style={s.dangerRow}
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+          activeOpacity={0.6}
+        >
+          {deleting
+            ? <ActivityIndicator size="small" color={C.err} />
+            : <Text style={s.deleteText}>מחיקת החשבון שלי</Text>}
+        </TouchableOpacity>
+      </View>
+      <Text style={s.dangerHint}>
+        מחיקת החשבון מוחקת את הפרטים האישיים שלך ואינה ניתנת לביטול.
+      </Text>
+
       <Text style={s.hint}>ההגדרות נשמרות במכשיר הזה</Text>
     </ScrollView>
   );
@@ -117,7 +200,7 @@ function SettingsRow({ C, iconSet, iconKey, label, note, onPress }) {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 50 },
+  content: { padding: 20, paddingBottom: 50 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', marginBottom: 20 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: C.muted, textAlign: 'right', marginBottom: 10, marginTop: 22 },
 
@@ -146,4 +229,9 @@ const makeStyles = (C) => StyleSheet.create({
   swatch: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 
   hint: { fontSize: 12, color: C.mutedLt, textAlign: 'center', marginTop: 24 },
+  // 52pt tall — comfortably above Apple's 44pt minimum touch target
+  dangerRow: { paddingVertical: 16, paddingHorizontal: 16, alignItems: 'center', minHeight: 52, justifyContent: 'center' },
+  logoutText: { fontSize: 15, fontWeight: '700', color: C.text },
+  deleteText: { fontSize: 15, fontWeight: '700', color: C.err },
+  dangerHint: { fontSize: 12, color: C.mutedLt, textAlign: 'center', marginTop: 8, lineHeight: 17 },
 });

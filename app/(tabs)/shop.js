@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Alert, ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -23,6 +24,7 @@ function quotaLabel(quota) {
 export default function ShopScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [products, setProducts] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -183,7 +185,7 @@ export default function ShopScreen() {
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       <Text style={s.title}>החנות</Text>
@@ -239,7 +241,7 @@ export default function ShopScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40, flexGrow: 1 },
+  content: { padding: 20, paddingBottom: 40, flexGrow: 1 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', marginBottom: 16 },
 
   section: { marginBottom: 20 },
@@ -310,7 +312,7 @@ const makeStyles = (C) => StyleSheet.create({
 
   termsLink: {
     fontSize: 12.5, fontWeight: '600', color: C.textSecondary,
-    textAlign: 'center', textDecorationLine: 'underline', marginTop: 6, paddingVertical: 4,
+    textAlign: 'center', textDecorationLine: 'underline', marginTop: 6, paddingVertical: 14,
   },
 
   emptyCard: {

@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, Alert, RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getMyEnrollments, cancelEnrollment } from '../../src/services/sessions';
@@ -14,6 +15,7 @@ const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמיש
 export default function RegistrationsScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const [enrollments, setEnrollments] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -82,7 +84,7 @@ export default function RegistrationsScreen() {
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       <Text style={s.title}>ההרשמות שלי</Text>
@@ -148,7 +150,7 @@ export default function RegistrationsScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
+  content: { padding: 20, paddingBottom: 40 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', marginBottom: 16 },
 
   emptyCard: {
@@ -191,7 +193,7 @@ const makeStyles = (C) => StyleSheet.create({
   cancelBtn: {
     marginTop: 10,
     paddingHorizontal: 16,
-    paddingVertical: 7,
+    paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: C.err,

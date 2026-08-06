@@ -2,7 +2,9 @@ import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, TextInput, Alert, RefreshControl,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getUser, refreshMe, updateProfile, logout } from '../../src/services/auth';
@@ -39,25 +41,36 @@ function dayLabel(value) {
 export default function ProfileScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const [user, setUser] = useState(null);
+  const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editDay, setEditDay] = useState('');
 
-  const loadData = async () => {
-    let u = await getUser();
-    try {
-      const fresh = await refreshMe();
-      if (fresh) u = fresh;
-    } catch {}
+  const applyUser = (u) => {
     setUser(u);
     if (u) {
       setEditName(u.full_name || '');
       setEditEmail(u.email || '');
       setEditDay(normalizeDay(u.preferred_day));
     }
+  };
+
+  const loadData = async () => {
+    // Paint from the cached user first. Waiting for refreshMe() before the
+    // first setUser left the screen blank for up to the 15s request timeout
+    // on a weak connection — at the range, that is most of the time.
+    const cached = await getUser();
+    if (cached) applyUser(cached);
+    try {
+      const fresh = await refreshMe();
+      if (fresh) applyUser(fresh);
+    } catch {}
+    setLoaded(true);
   };
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
@@ -73,6 +86,7 @@ export default function ProfileScreen() {
       Alert.alert('שגיאה', 'שם לא יכול להיות ריק');
       return;
     }
+    setSaving(true);
     try {
       const payload = {
         full_name: editName.trim(),
@@ -87,6 +101,8 @@ export default function ProfileScreen() {
       Alert.alert('נשמר', 'הפרטים עודכנו במערכת');
     } catch (e) {
       Alert.alert('שגיאה', e.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -104,7 +120,25 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (!user) return null;
+  // Never a blank screen: spinner while loading, a clear message if we ended
+  // up with nothing to show.
+  if (!user) {
+    return (
+      <View style={[s.container, s.centered]}>
+        {loaded ? (
+          <>
+            <Ionicons name="cloud-offline-outline" size={38} color={C.mutedLt} />
+            <Text style={s.emptyTitle}>לא הצלחנו לטעון את הפרופיל</Text>
+            <TouchableOpacity style={s.retryBtn} onPress={loadData} activeOpacity={0.7}>
+              <Text style={s.retryBtnText}>נסה שוב</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <ActivityIndicator size="large" color={C.black} />
+        )}
+      </View>
+    );
+  }
 
   const initials = (user.full_name || '?').split(' ').map(w => w[0]).join('').slice(0, 2);
   const totalBullets = user.total_bullets || 0;
@@ -112,9 +146,15 @@ export default function ProfileScreen() {
   const levelInfo = getUserLevel(totalBullets, totalSessions);
 
   return (
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
     <ScrollView
       style={s.container}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       {/* Avatar */}
@@ -151,12 +191,21 @@ export default function ProfileScreen() {
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>פרטים אישיים</Text>
           {!editing ? (
-            <TouchableOpacity onPress={() => setEditing(true)}>
+            <TouchableOpacity
+              onPress={() => setEditing(true)}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            >
               <Text style={s.editBtn}>עריכה</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={handleSave}>
-              <Text style={s.saveBtn}>שמירה</Text>
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={saving}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            >
+              {saving
+                ? <ActivityIndicator size="small" color={C.black} />
+                : <Text style={s.saveBtn}>שמירה</Text>}
             </TouchableOpacity>
           )}
         </View>
@@ -262,12 +311,17 @@ export default function ProfileScreen() {
         <Text style={s.logoutText}>התנתקות</Text>
       </TouchableOpacity>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
+  centered: { alignItems: 'center', justifyContent: 'center', gap: 12, padding: 28 },
+  emptyTitle: { fontSize: 15.5, fontWeight: '700', color: C.text, textAlign: 'center' },
+  retryBtn: { backgroundColor: C.black, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 28 },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: C.white },
+  content: { padding: 20, paddingBottom: 40 },
 
   avatarSection: { alignItems: 'center', marginBottom: 24 },
   avatar: {

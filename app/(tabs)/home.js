@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, RefreshControl, Image, Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getUser, refreshMe } from '../../src/services/auth';
@@ -53,6 +54,7 @@ function ProgressBar({ progress, label, s }) {
 export default function HomeScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
   const [user, setUser] = useState(null);
   const [nextSession, setNextSession] = useState(null);
   const [myEnrollments, setMyEnrollments] = useState([]);
@@ -121,7 +123,7 @@ export default function HomeScreen() {
     <>
     <ScrollView
       style={s.container}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       {/* Header */}
@@ -353,7 +355,7 @@ export default function HomeScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
+  content: { padding: 20, paddingBottom: 40 },
 
   headerRow: {
     flexDirection: 'row-reverse',

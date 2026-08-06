@@ -2,7 +2,9 @@ import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TextInput,
   TouchableOpacity, Alert, Switch, Modal, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getUser, updateShooterProfile } from '../../src/services/auth';
@@ -32,6 +34,7 @@ const GEAR = [
 export default function ShooterScreen() {
   const { C } = useTheme();
   const s = makeStyles(C);
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -172,7 +175,16 @@ export default function ShooterScreen() {
 
   return (
     <>
-      <ScrollView style={s.container} contentContainerStyle={s.content}>
+      <KeyboardAvoidingView
+        style={s.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+      <ScrollView
+        style={s.container}
+        contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         <View style={s.topBar}>
           <TouchableOpacity onPress={() => router.back()}><Ionicons name="chevron-forward" size={26} color={C.text} /></TouchableOpacity>
           <Text style={s.title}>פרטי יורה וציוד</Text>
@@ -296,6 +308,7 @@ export default function ShooterScreen() {
           {saving ? <ActivityIndicator color={C.white} /> : <Text style={s.saveBtnText}>שמירה</Text>}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Picker modal */}
       <Modal visible={!!pickerMode} animationType="slide" transparent onRequestClose={() => setPickerMode(null)}>
@@ -383,7 +396,7 @@ const makeStyles = (C) => {
   const st = StyleSheet.create({
     loader: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' },
     container: { flex: 1, backgroundColor: C.bg },
-    content: { padding: 20, paddingTop: 60, paddingBottom: 50 },
+    content: { padding: 20, paddingBottom: 50 },
     topBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 20 },
     title: { fontSize: 22, fontWeight: '800', color: C.text },
     section: { fontSize: 14, fontWeight: '800', color: C.text, textAlign: 'right', marginTop: 22, marginBottom: 10 },
