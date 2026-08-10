@@ -144,3 +144,20 @@ export async function logout() {
   await AsyncStorage.removeItem(TOKEN_KEY);
   await AsyncStorage.removeItem(OTP_KEY);
 }
+
+/** "כן, חידשתי" — השרת דוחף את התוקף שלוש שנים מהתוקף הקיים. */
+export async function confirmLicenseRenewal() {
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
+  const result = await callFunction('mobileAppApi', { action: 'confirmLicenseRenewal', token });
+  if (!result.ok) throw new Error(result.error || 'עדכון הרישיון נכשל');
+  if (result.customer) await saveUser(result.customer);
+  return result;
+}
+
+/** "עדיין לא" — תיעוד בלבד; הפופ-אפ יחזור בכניסה הבאה. */
+export async function declineLicenseRenewal() {
+  const token = await getToken();
+  if (!token) return;
+  await callFunction('mobileAppApi', { action: 'declineLicenseRenewal', token });
+}

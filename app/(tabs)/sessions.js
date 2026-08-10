@@ -96,6 +96,8 @@ export default function SessionsScreen() {
     rule_limit: 'המנוי שלך מגביל את מספר ההרשמות לאימון מהסוג הזה בתקופה הזו.',
     inactive: 'החשבון אינו פעיל כרגע. פנה אלינו.',
     full: 'האימון מלא.',
+    // רישיון נשק (10/08/2026) — האחריות על המתאמן; אין אימון בלי רישיון בתוקף.
+    license_expired: 'רישיון הנשק שלך אינו בתוקף במערכת. יש לעדכן את תאריך החידוש כדי להירשם לאימונים.',
   };
 
   const handleEnroll = (session) => {
@@ -103,6 +105,13 @@ export default function SessionsScreen() {
 
     // Explain the block up-front instead of a mysterious server error
     if (session.block_reason && BLOCK_MSG[session.block_reason]) {
+      if (session.block_reason === 'license_expired') {
+        Alert.alert('רישיון הנשק אינו בתוקף', BLOCK_MSG.license_expired, [
+          { text: 'לא עכשיו', style: 'cancel' },
+          { text: 'לעדכון הרישיון', onPress: () => router.push('/(tabs)/shooter') },
+        ]);
+        return;
+      }
       if (session.block_reason === 'profile_incomplete') {
         Alert.alert('נדרשת השלמת פרטים', BLOCK_MSG.profile_incomplete, [
           { text: 'לא עכשיו', style: 'cancel' },

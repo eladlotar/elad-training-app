@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, tabIcon } from '../../src/context/ThemeContext';
+import LicenseRenewalPrompt from '../../src/components/LicenseRenewalPrompt';
+import { refreshMe, getUser } from '../../src/services/auth';
 
 function HomeButton({ focused, C, iconSet }) {
   const s = styles(C);
@@ -16,11 +19,25 @@ function HomeButton({ focused, C, iconSet }) {
 export default function TabsLayout() {
   const { C, iconSet } = useTheme();
   const s = styles(C);
+  // פופ-אפ חידוש רישיון — נבדק פעם אחת בכל כניסה לאפליקציה (אפיון אלעד 10/08).
+  // מרענן מהשרת כדי שהמצב יהיה עדכני גם אם התוקף שונה במערכת הניהול.
+  const [licensePrompt, setLicensePrompt] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      let u = null;
+      try { u = await refreshMe(); } catch (_) { /* אופליין */ }
+      if (!u) { try { u = await getUser(); } catch (_) { /* אין משתמש */ } }
+      if (alive && u?.license?.prompt_renewal) setLicensePrompt(u.license);
+    })();
+    return () => { alive = false; };
+  }, []);
   // Respect the device's bottom safe area (home indicator / gesture bar)
   // instead of a fixed height that fits only notched iPhones.
   const insets = useSafeAreaInsets();
 
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -99,6 +116,12 @@ export default function TabsLayout() {
       <Tabs.Screen name="shooter" options={{ href: null }} />
       <Tabs.Screen name="subscription" options={{ href: null }} />
     </Tabs>
+    <LicenseRenewalPrompt
+      visible={!!licensePrompt}
+      license={licensePrompt}
+      onDone={() => setLicensePrompt(null)}
+    />
+    </>
   );
 }
 
