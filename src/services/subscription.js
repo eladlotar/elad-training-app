@@ -11,6 +11,20 @@ function serverError(result, fallback) {
   return err;
 }
 
+/**
+ * Equipment catalogue (StoreProduct) — the physical gear tab of the shop.
+ * Shares its images, prices and Grow links with the public website, so those
+ * change without an app update. `in_stock` is a boolean; exact stock counts
+ * stay server-side.
+ */
+export async function getStoreProducts() {
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
+  const result = await callFunction('mobileAppApi', { action: 'getStoreProducts', token });
+  if (!result.ok) throw serverError(result, 'שגיאה בטעינת הציוד');
+  return result.products || [];
+}
+
 /** Shop catalog: products + owned/pending flags for this customer. */
 export async function getProducts() {
   const token = await getToken();

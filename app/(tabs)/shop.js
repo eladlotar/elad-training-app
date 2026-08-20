@@ -2,13 +2,14 @@ import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, Alert, ActivityIndicator,
-  RefreshControl,
+  RefreshControl, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getProducts,
+  getStoreProducts,
   getMySubscription,
   requestSubscription,
   cancelSubscriptionRequest,
@@ -27,18 +28,25 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [products, setProducts] = useState([]);
+  const [gear, setGear] = useState([]);
+  // 'services' = memberships (Product) · 'gear' = equipment (StoreProduct)
+  const [tab, setTab] = useState('services');
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState(null);
 
   const loadData = async () => {
-    try {
-      setProducts(await getProducts());
+    // The two catalogues are independent: a failure in one must not blank the
+    // other, so they settle separately rather than in a single try block.
+    const [svc, eq] = await Promise.allSettled([getProducts(), getStoreProducts()]);
+    if (svc.status === 'fulfilled') {
+      setProducts(svc.value);
       setLoadError(false);
-    } catch {
+    } else {
       setLoadError(true);
     }
+    setGear(eq.status === 'fulfilled' ? eq.value : []);
     setLoaded(true);
   };
 
@@ -108,6 +116,45 @@ export default function ShopScreen() {
 
   const subscriptions = products.filter(p => p.is_subscription);
   const others = products.filter(p => !p.is_subscription);
+
+  const handleBuyGear = (item) => {
+    if (!item.in_stock) return;
+    if (item.pay_url) {
+      router.push({ pathname: '/payment', params: { url: item.pay_url, name: item.name } });
+      return;
+    }
+    Alert.alert(item.name, 'הפריט זמין דרך המשרד. ניצור איתך קשר להסדרת הרכישה.');
+  };
+
+  const renderGearCard = (item) => (
+    <View key={item.id} style={[s.gearCard, !item.in_stock && s.gearCardOut]}>
+      <View style={s.gearImgWrap}>
+        {item.image_url ? (
+          <Image
+            source={{ uri: item.image_url }}
+            style={[s.gearImg, !item.in_stock && s.gearImgOut]}
+            resizeMode="cover"
+          />
+        ) : (
+          <Ionicons name="cube-outline" size={26} color={C.mutedLt} />
+        )}
+        {!item.in_stock && (
+          <View style={s.outBadge}><Text style={s.outBadgeText}>אזל</Text></View>
+        )}
+      </View>
+      <Text style={s.gearName} numberOfLines={2}>{item.name}</Text>
+      <View style={s.gearFooter}>
+        <Text style={s.gearPrice}>{item.price} ש"ח</Text>
+        {item.in_stock ? (
+          <TouchableOpacity style={s.gearBuyBtn} onPress={() => handleBuyGear(item)} activeOpacity={0.7}>
+            <Text style={s.gearBuyText}>לרכישה</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={s.gearOutText}>לא במלאי</Text>
+        )}
+      </View>
+    </View>
+  );
 
   const renderCard = (p) => {
     const isBusy = busyId === p.id;
@@ -190,6 +237,19 @@ export default function ShopScreen() {
     >
       <Text style={s.title}>החנות</Text>
 
+      <View style={s.tabs}>
+        <TouchableOpacity
+          style={[s.tab, tab === 'services' && s.tabOn]}
+          onPress={() => setTab('services')} activeOpacity={0.8}>
+          <Text style={[s.tabText, tab === 'services' && s.tabTextOn]}>מנויים</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.tab, tab === 'gear' && s.tabOn]}
+          onPress={() => setTab('gear')} activeOpacity={0.8}>
+          <Text style={[s.tabText, tab === 'gear' && s.tabTextOn]}>ציוד</Text>
+        </TouchableOpacity>
+      </View>
+
       {!loaded ? (
         <View style={s.emptyCard}>
           <ActivityIndicator size="large" color={C.black} />
@@ -218,20 +278,46 @@ export default function ShopScreen() {
         </View>
       ) : (
         <>
-          {subscriptions.length > 0 && (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>מנויים חודשיים</Text>
-              {subscriptions.map(renderCard)}
-              <TouchableOpacity onPress={() => router.push('/terms')} activeOpacity={0.7}>
-                <Text style={s.termsLink}>ההצטרפות למנוי כפופה לתקנון המנויים — לחצו לקריאה</Text>
-              </TouchableOpacity>
+          {tab === 'services' ? (
+            <>
+              {subscriptions.length > 0 && (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>מנויים חודשיים</Text>
+                  {subscriptions.map(renderCard)}
+                  <TouchableOpacity onPress={() => router.push('/terms')} activeOpacity={0.7}>
+                    <Text style={s.termsLink}>ההצטרפות למנוי כפופה לתקנון המנויים — לחצו לקריאה</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {others.length > 0 && (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>מוצרים נוספים</Text>
+                  {others.map(renderCard)}
+                </View>
+              )}
+            </>
+          ) : gear.length === 0 ? (
+            <View style={s.emptyCard}>
+              <View style={s.iconWrap}>
+                <Ionicons name="cube-outline" size={34} color={C.white} />
+              </View>
+              <Text style={s.emptyTitle}>אין ציוד זמין כרגע</Text>
+              <Text style={s.emptyText}>הקטלוג מתעדכן מהמשרד. שווה לחזור לבדוק.</Text>
             </View>
-          )}
-          {others.length > 0 && (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>מוצרים נוספים</Text>
-              {others.map(renderCard)}
-            </View>
+          ) : (
+            /* One section per category; the server already sorts by category,
+               then in-stock, then price. */
+            Object.entries(
+              gear.reduce((acc, it) => {
+                (acc[it.category_label] ||= []).push(it);
+                return acc;
+              }, {})
+            ).map(([label, items]) => (
+              <View key={label} style={s.section}>
+                <Text style={s.sectionTitle}>{label}</Text>
+                <View style={s.gearGrid}>{items.map(renderGearCard)}</View>
+              </View>
+            ))
           )}
         </>
       )}
@@ -243,6 +329,48 @@ const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   content: { padding: 20, paddingBottom: 40, flexGrow: 1 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', marginBottom: 16 },
+
+  tabs: {
+    flexDirection: 'row-reverse', backgroundColor: C.cardAlt,
+    borderRadius: 10, padding: 3, marginBottom: 18,
+  },
+  tab: { flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center' },
+  tabOn: { backgroundColor: C.black },
+  tabText: { fontSize: 14, fontWeight: '700', color: C.textSecondary },
+  tabTextOn: { color: C.white },
+
+  gearGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between' },
+  gearCard: {
+    width: '48%', backgroundColor: C.card, borderRadius: 12,
+    borderWidth: 1, borderColor: C.border, marginBottom: 12, overflow: 'hidden',
+  },
+  gearCardOut: { opacity: 0.72 },
+  gearImgWrap: {
+    height: 110, backgroundColor: C.accentLt,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  gearImg: { width: '100%', height: '100%' },
+  gearImgOut: { opacity: 0.5 },
+  outBadge: {
+    position: 'absolute', top: 8, right: 8,
+    backgroundColor: C.err, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  outBadgeText: { color: C.white, fontSize: 11, fontWeight: '700' },
+  gearName: {
+    fontSize: 12, fontWeight: '600', color: C.text, textAlign: 'right',
+    paddingHorizontal: 10, paddingTop: 9, minHeight: 46, lineHeight: 17,
+  },
+  gearFooter: {
+    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 10, paddingBottom: 10, paddingTop: 2,
+  },
+  gearPrice: { fontSize: 15, fontWeight: '800', color: C.black },
+  gearBuyBtn: {
+    backgroundColor: C.black, borderRadius: 7,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  gearBuyText: { color: C.white, fontSize: 12, fontWeight: '700' },
+  gearOutText: { fontSize: 11, fontWeight: '600', color: C.muted },
 
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: C.text, textAlign: 'right', marginBottom: 10 },
