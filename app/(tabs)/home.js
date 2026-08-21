@@ -170,7 +170,13 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={s.levelStatsRow}>
+        {/* המספרים האלה נשענים על יומן היורים — לחיצה פותחת את הפירוט
+            המלא: כל אימון, המדריך, וכמה כדורים ירה בו. */}
+        <TouchableOpacity
+          style={s.levelStatsRow}
+          onPress={() => router.push('/(tabs)/history')}
+          activeOpacity={0.7}
+        >
           <View style={s.levelStat}>
             <Text style={s.levelStatValue}>{totalBullets.toLocaleString()}</Text>
             <Text style={s.levelStatLabel}>סה"כ כדורים</Text>
@@ -180,6 +186,10 @@ export default function HomeScreen() {
             <Text style={s.levelStatValue}>{totalSessions}</Text>
             <Text style={s.levelStatLabel}>סה"כ אימונים</Text>
           </View>
+        </TouchableOpacity>
+        <View style={s.historyHintRow}>
+          <Text style={s.historyHint}>לכל האימונים שלי</Text>
+          <Ionicons name="chevron-back" size={12} color={C.muted} />
         </View>
       </View>
 
@@ -476,6 +486,11 @@ const makeStyles = (C) => StyleSheet.create({
   levelStatDivider: { width: 1, backgroundColor: C.borderLt },
   levelStatValue: { fontSize: 18, fontWeight: '800', color: C.text },
   levelStatLabel: { fontSize: 11, color: C.muted, marginTop: 2 },
+  historyHintRow: {
+    flexDirection: 'row-reverse', alignItems: 'center',
+    justifyContent: 'center', gap: 3, marginTop: 8,
+  },
+  historyHint: { fontSize: 11, color: C.muted },
 
   // Sections
   section: { marginBottom: 20 },
