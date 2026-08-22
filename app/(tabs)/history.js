@@ -73,10 +73,10 @@ export default function HistoryScreen() {
       }
     >
       <View style={s.header}>
-        <Text style={s.title}>האימונים שלי</Text>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
           <Ionicons name="chevron-forward" size={24} color={C.text} />
         </TouchableOpacity>
+        <Text style={s.title}>האימונים שלי</Text>
       </View>
 
       {!loaded ? (
@@ -197,12 +197,15 @@ export default function HistoryScreen() {
 
 const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 20, paddingBottom: 40 },
+  // ריווח תחתון גדול — סרגל הלשוניות מרחף מעל התוכן, ובלעדיו
+  // הכרטיס האחרון נחתך בדיוק באמצע.
+  content: { padding: 20, paddingBottom: 110 },
 
   header: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 6,
     marginBottom: 16,
   },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right' },
