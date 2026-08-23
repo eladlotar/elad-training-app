@@ -81,7 +81,13 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}>
+    <ScrollView style={s.container} contentContainerStyle={[s.content, {
+        paddingTop: insets.top + 12,
+        // סרגל הלשוניות מרחף מעל התוכן: 57 פיקסלים לסרגל, 24 לכפתור
+        // הבית שבולט מעליו, ועוד אוויר. ריווח קבוע של 40 היה קטן
+        // מהסרגל עצמו, ולכן הכרטיס האחרון בכל מסך נחתך מתחתיו.
+        paddingBottom: insets.bottom + 96,
+      }]}>
       <Text style={s.title}>הגדרות</Text>
 
       {/* Account */}

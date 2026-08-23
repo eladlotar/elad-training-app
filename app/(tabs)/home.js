@@ -123,7 +123,13 @@ export default function HomeScreen() {
     <>
     <ScrollView
       style={s.container}
-      contentContainerStyle={[s.content, { paddingTop: insets.top + 12 }]}
+      contentContainerStyle={[s.content, {
+        paddingTop: insets.top + 12,
+        // סרגל הלשוניות מרחף מעל התוכן: 57 פיקסלים לסרגל, 24 לכפתור
+        // הבית שבולט מעליו, ועוד אוויר. ריווח קבוע של 40 היה קטן
+        // מהסרגל עצמו, ולכן הכרטיס האחרון בכל מסך נחתך מתחתיו.
+        paddingBottom: insets.bottom + 96,
+      }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.black} />}
     >
       {/* Header */}
@@ -159,10 +165,16 @@ export default function HomeScreen() {
             <Text style={s.levelNextText}>
               עד רמה {levelInfo.next.level} - {levelInfo.next.name}
             </Text>
-            <ProgressBar s={s}
-              progress={levelInfo.bulletsProgress}
-              label={`כדורים: ${totalBullets} / ${levelInfo.next.bullets}`}
-            />
+            {/* מונה הכדורים מוצג רק כשיש מה להציג. כמות התחמושת נרשמת
+                ביומן היורים רק בחלק קטן מהאימונים, ולרוב המתאמנים הפס הזה
+                תקוע על אפס אחוז לנצח — מה שהופך את כרטיס הדרגה מתמריץ
+                למשהו מייאש. כשאין נתון, ההתקדמות נמדדת לפי אימונים בלבד. */}
+            {totalBullets > 0 ? (
+              <ProgressBar s={s}
+                progress={levelInfo.bulletsProgress}
+                label={`כדורים: ${totalBullets} / ${levelInfo.next.bullets}`}
+              />
+            ) : null}
             <ProgressBar s={s}
               progress={levelInfo.sessionsProgress}
               label={`אימונים: ${totalSessions} / ${levelInfo.next.sessions}`}
@@ -177,11 +189,15 @@ export default function HomeScreen() {
           onPress={() => router.push('/(tabs)/history')}
           activeOpacity={0.7}
         >
-          <View style={s.levelStat}>
-            <Text style={s.levelStatValue}>{totalBullets.toLocaleString()}</Text>
-            <Text style={s.levelStatLabel}>סה"כ כדורים</Text>
-          </View>
-          <View style={s.levelStatDivider} />
+          {totalBullets > 0 ? (
+            <>
+              <View style={s.levelStat}>
+                <Text style={s.levelStatValue}>{totalBullets.toLocaleString()}</Text>
+                <Text style={s.levelStatLabel}>סה"כ כדורים</Text>
+              </View>
+              <View style={s.levelStatDivider} />
+            </>
+          ) : null}
           <View style={s.levelStat}>
             <Text style={s.levelStatValue}>{totalSessions}</Text>
             <Text style={s.levelStatLabel}>סה"כ אימונים</Text>
