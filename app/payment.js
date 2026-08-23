@@ -114,6 +114,9 @@ export default function PaymentScreen() {
     );
   }
 
+  const hasBottomBar = !exiting &&
+    (status === 'checking' || status === 'confirmed' || status === 'unknown');
+
   return (
     <View style={s.container}>
       {/* Header */}
@@ -174,7 +177,11 @@ export default function PaymentScreen() {
         <WebView
           ref={webRef}
           source={{ uri: String(url) }}
-          style={s.web}
+          // סרגל הניווט של אנדרואיד מרחף מעל תחתית המסך. בלי הריווח הזה
+          // כפתור התשלום של גרואו — שיושב בתחתית הדף — נחתך מתחתיו
+          // ואי אפשר ללחוץ עליו. אומת על גלקסי A06 עם אנדרואיד 14.
+          // כשמוצג סרגל תחתון משלנו הוא כבר מוסיף את השוליים בעצמו.
+          style={[s.web, hasBottomBar ? null : { marginBottom: insets.bottom }]}
           onNavigationStateChange={detectSuccess}
           onError={() => setFailed(true)}
           startInLoadingState

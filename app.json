@@ -28,7 +28,12 @@
         "backgroundColor": "#3F4A2E"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.eladlotar.training"
+      "package": "com.eladlotar.training",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
