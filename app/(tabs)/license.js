@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl,
+  View, ScrollView, StyleSheet, RefreshControl,
 } from 'react-native';
+import { Text } from '../../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { getUser, refreshMe } from '../../src/services/auth';

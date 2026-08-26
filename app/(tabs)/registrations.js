@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, RefreshControl,
+  View, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl,
 } from 'react-native';
+import { Text } from '../../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -129,6 +129,16 @@ export default function RegistrationsScreen() {
                   {d ? `יום ${DAY_NAMES[d.getDay()]}` : ''} | {e.session_time || ''}
                 </Text>
                 {e.session_location ? <Text style={s.cardMeta}>{e.session_location}</Text> : null}
+                {/* כמות הכדורים שנקבעה לאימון — מוצגת רק כשיש ערך */}
+                {e.session_ammo > 0 ? (
+                  <View style={s.ammoRow}>
+                    <Text style={s.ammoValue}>{e.session_ammo}</Text>
+                    <Text style={s.ammoLabel}>כדורים באימון</Text>
+                  </View>
+                ) : null}
+                {e.session_notes ? (
+                  <Text style={s.cardNotes} numberOfLines={3}>{e.session_notes}</Text>
+                ) : null}
                 {e.cancel_mode === 'started' ? (
                   <Text style={s.noCancelText}>האימון התחיל</Text>
                 ) : e.cancel_mode === 'late' ? (
@@ -195,6 +205,10 @@ const makeStyles = (C) => StyleSheet.create({
   cardContent: { flex: 1, padding: 14, alignItems: 'flex-end' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 3 },
   cardMeta: { fontSize: 12, color: C.muted, marginTop: 2 },
+  ammoRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 5, marginTop: 6 },
+  ammoValue: { fontSize: 16, fontWeight: '800', color: C.accent2 },
+  ammoLabel: { fontSize: 11, color: C.muted },
+  cardNotes: { fontSize: 12, color: C.textSecondary, textAlign: 'right', marginTop: 6, lineHeight: 17 },
 
   cancelBtn: {
     marginTop: 10,

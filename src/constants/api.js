@@ -32,9 +32,15 @@ async function handleUnauthorized() {
   setTimeout(() => { handlingUnauthorized = false; }, 1500);
 }
 
-export async function callFunction(functionName, data = {}) {
+/**
+ * @param {string} functionName
+ * @param {object} data
+ * @param {{ timeoutMs?: number }} [opts] — העלאת תמונה איטית מקריאה רגילה,
+ *   ולכן מסך התיקייה מבקש חלון ארוך יותר. ברירת המחדל לא השתנתה.
+ */
+export async function callFunction(functionName, data = {}, opts = {}) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs || TIMEOUT_MS);
   try {
     const response = await fetch(`${BASE_URL}/${functionName}`, {
       method: 'POST',

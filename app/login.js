@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform,
-  Alert, ActivityIndicator, ScrollView,
+  View, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { Text, TextInput } from '../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { requestOtp, verifyOtp, registerUser } from '../src/services/auth';

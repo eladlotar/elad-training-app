@@ -8,7 +8,10 @@
  * הפופ-אפ לא ניתן לסגירה בלחיצה בחוץ — זו החלטה שהמתאמן חייב לקבל.
  */
 import { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import {
+  Modal, View, TouchableOpacity, ActivityIndicator, StyleSheet,
+} from 'react-native';
+import { Text } from './ScaledText';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { confirmLicenseRenewal, declineLicenseRenewal } from '../services/auth';

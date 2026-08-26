@@ -1,4 +1,7 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View, ScrollView, StyleSheet, TouchableOpacity,
+} from 'react-native';
+import { Text } from '../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

@@ -22,7 +22,12 @@ export async function getStoreProducts() {
   if (!token) throw new Error('יש להתחבר מחדש');
   const result = await callFunction('mobileAppApi', { action: 'getStoreProducts', token });
   if (!result.ok) throw serverError(result, 'שגיאה בטעינת הציוד');
-  return result.products || [];
+  // הזכאות להנחת מנוי נקבעת בשרת בלבד — הלקוח לא יכול להצהיר על עצמו כמנוי.
+  return {
+    products: result.products || [],
+    isSubscriber: !!result.is_subscriber,
+    discountPct: result.subscriber_discount_pct || 0,
+  };
 }
 
 /** Shop catalog: products + owned/pending flags for this customer. */

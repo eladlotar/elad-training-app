@@ -1,9 +1,8 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, ActivityIndicator,
-  RefreshControl,
+  View, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { Text } from '../../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

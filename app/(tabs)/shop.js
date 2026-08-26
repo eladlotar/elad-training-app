@@ -1,9 +1,8 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, ActivityIndicator,
-  RefreshControl, Image,
+  View, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Image,
 } from 'react-native';
+import { Text } from '../../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,10 +15,24 @@ import {
 } from '../../src/services/subscription';
 import { useTheme } from '../../src/context/ThemeContext';
 
+/** האם למוצר יש מחיר מנוי נמוך מהרגיל. הזכאות עצמה נקבעת בשרת. */
+function gearDiscounted(item) {
+  return !!item.discount_eligible && Number(item.subscriber_price) < Number(item.price);
+}
+
 function quotaLabel(quota) {
   if (!quota) return null;
   if (quota === 1) return 'אימון אחד בחודש';
   return `${quota} אימונים בחודש`;
+}
+
+/** "3 כניסות · בתוקף 4 חודשים" — מה בדיוק מקבלים בכרטיסייה. */
+function punchLabel(credits, months) {
+  if (!credits) return null;
+  const entries = credits === 1 ? 'כניסה אחת' : `${credits} כניסות`;
+  if (!months) return entries;
+  const period = months === 1 ? 'חודש' : months === 2 ? 'חודשיים' : `${months} חודשים`;
+  return `${entries} · בתוקף ${period}`;
 }
 
 export default function ShopScreen() {
@@ -29,6 +42,8 @@ export default function ShopScreen() {
   const router = useRouter();
   const [products, setProducts] = useState([]);
   const [gear, setGear] = useState([]);
+  // זכאות להנחת מנוי — מגיעה מהשרת בלבד, יחד עם הקטלוג
+  const [isSubscriber, setIsSubscriber] = useState(false);
   // 'services' = memberships (Product) · 'gear' = equipment (StoreProduct)
   const [tab, setTab] = useState('services');
   const [loaded, setLoaded] = useState(false);
@@ -46,7 +61,12 @@ export default function ShopScreen() {
     } else {
       setLoadError(true);
     }
-    setGear(eq.status === 'fulfilled' ? eq.value : []);
+    if (eq.status === 'fulfilled') {
+      setGear(eq.value.products);
+      setIsSubscriber(eq.value.isSubscriber);
+    } else {
+      setGear([]);
+    }
     setLoaded(true);
   };
 
@@ -143,8 +163,25 @@ export default function ShopScreen() {
         )}
       </View>
       <Text style={s.gearName} numberOfLines={2}>{item.name}</Text>
+      {/* מחיר המנוי מגיע מוכן מהשרת — המסך לא מחשב אחוזים ולא מחליט מי מנוי.
+          מי שאינו מנוי רואה כמה היה חוסך, כך שכל כרטיס הוא סיבה להצטרף. */}
+      {!isSubscriber && gearDiscounted(item) ? (
+        <Text style={s.gearSubHint}>
+          למנויים {item.subscriber_price} ש"ח
+        </Text>
+      ) : null}
+      {isSubscriber && gearDiscounted(item) && !item.subscriber_checkout_ready ? (
+        <Text style={s.gearSubWarn}>ההנחה תוסדר מולנו בעת הרכישה</Text>
+      ) : null}
       <View style={s.gearFooter}>
-        <Text style={s.gearPrice}>{item.price} ש"ח</Text>
+        <View style={s.gearPriceWrap}>
+          <Text style={s.gearPrice}>
+            {isSubscriber && gearDiscounted(item) ? item.subscriber_price : item.price} ש"ח
+          </Text>
+          {isSubscriber && gearDiscounted(item) ? (
+            <Text style={s.gearOldPrice}>{item.price}</Text>
+          ) : null}
+        </View>
         {item.in_stock ? (
           <TouchableOpacity style={s.gearBuyBtn} onPress={() => handleBuyGear(item)} activeOpacity={0.7}>
             <Text style={s.gearBuyText}>לרכישה</Text>
@@ -186,6 +223,24 @@ export default function ShopScreen() {
           <View style={s.quotaRow}>
             <Ionicons name="repeat" size={15} color={C.textSecondary} />
             <Text style={s.quotaText}>{quota}</Text>
+          </View>
+        )}
+
+        {/* כרטיסייה: כמה כניסות ולכמה זמן. בלי זה הלקוח רואה רק מחיר. */}
+        {p.is_punch_card && punchLabel(p.credits, p.duration_months) && (
+          <View style={s.quotaRow}>
+            <Ionicons name="ticket-outline" size={15} color={C.textSecondary} />
+            <Text style={s.quotaText}>{punchLabel(p.credits, p.duration_months)}</Text>
+          </View>
+        )}
+
+        {/* יתרה בכרטיסייה שכבר נרכשה — לא חוסמת רכישה נוספת */}
+        {p.is_punch_card && p.credits_remaining > 0 && (
+          <View style={s.quotaRow}>
+            <Ionicons name="checkmark-circle" size={15} color={C.ok} />
+            <Text style={s.balanceText}>
+              נשארו לך {p.credits_remaining === 1 ? 'כניסה אחת' : `${p.credits_remaining} כניסות`}
+            </Text>
           </View>
         )}
 
@@ -370,7 +425,12 @@ const makeStyles = (C) => StyleSheet.create({
     flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 10, paddingBottom: 10, paddingTop: 2,
   },
+  balanceText: { fontSize: 13, fontWeight: '700', color: C.ok },
   gearPrice: { fontSize: 15, fontWeight: '800', color: C.black },
+  gearPriceWrap: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 5 },
+  gearOldPrice: { fontSize: 12, color: C.mutedLt, textDecorationLine: 'line-through' },
+  gearSubHint: { fontSize: 10.5, color: C.accent2, textAlign: 'right', marginTop: 3 },
+  gearSubWarn: { fontSize: 10.5, color: C.warn, textAlign: 'right', marginTop: 3, lineHeight: 15 },
   gearBuyBtn: {
     backgroundColor: C.black, borderRadius: 7,
     paddingHorizontal: 12, paddingVertical: 6,

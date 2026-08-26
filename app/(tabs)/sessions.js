@@ -1,9 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, ActivityIndicator,
-  RefreshControl,
+  View, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { Text } from '../../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
@@ -341,8 +340,14 @@ export default function SessionsScreen() {
             const enrollment = session.participant_id
               ? { id: session.participant_id, session_title: session.title }
               : null;
-            // Courses are sold through the school, not self-service in the app.
+            // קורס נמכר כיחידה שלמה מול בית הספר ולא נרכש באפליקציה —
+            // אבל מחזיק כרטיסייה כן יכול לתפוס מקום פנוי במפגש בודד
+            // בקורס (הכרעת אלעד 26/08/2026). לכן ההחלטה כאן נשענת על
+            // תשובת השרת (can_enroll), לא על סוג האירוע.
             const isCourse = session.type === 'course';
+            // רישום סדרה = הלקוח קנה את הקורס כולו; ביטול שלו מסיר מכל
+            // המפגשים, ולכן הוא לא נחשף כאן. רישום בודד כן ניתן לביטול.
+            const isSeriesRegistration = session.registration_type === 'series';
 
             return (
               <View key={session.id} style={[s.card, isFull && !isEnrolled && s.cardFull]}>
@@ -354,6 +359,17 @@ export default function SessionsScreen() {
                 <View style={s.cardContent}>
                   <Text style={s.cardTitle}>{session.title}</Text>
                   <Text style={s.cardMeta}>{session.location} | {session.instructor_name}</Text>
+                  {/* כמות הכדורים שנקבעה לאימון. מוצגת רק כשיש ערך —
+                      "0 כדורים" הוא מידע שגוי, לא מידע חסר. */}
+                  {session.training_ammo > 0 ? (
+                    <View style={s.ammoRow}>
+                      <Text style={s.ammoValue}>{session.training_ammo}</Text>
+                      <Text style={s.ammoLabel}>כדורים באימון</Text>
+                    </View>
+                  ) : null}
+                  {session.notes ? (
+                    <Text style={s.cardNotes} numberOfLines={3}>{session.notes}</Text>
+                  ) : null}
                   <View style={s.cardFooter}>
                     <View style={s.spotsWrap}>
                       {(isFull || spotsLeft <= 2) && (
@@ -363,14 +379,14 @@ export default function SessionsScreen() {
                         {isFull ? 'מלא' : spotsLeft === 1 ? 'מקום אחרון!' : spotsLeft === 2 ? 'נשארו 2 מקומות' : ''}
                       </Text>
                     </View>
-                    {isCourse ? (
-                      <Text style={s.courseNote}>
-                        {isEnrolled ? 'רשום לקורס' : 'הרשמה מול בית הספר'}
-                      </Text>
+                    {isEnrolled && isSeriesRegistration ? (
+                      <Text style={s.courseNote}>רשום לקורס</Text>
                     ) : isEnrolled ? (
                       <TouchableOpacity style={s.cancelBtn} onPress={() => handleCancel(enrollment)} activeOpacity={0.7}>
                         <Text style={s.cancelBtnText}>ביטול</Text>
                       </TouchableOpacity>
+                    ) : isCourse && !session.can_enroll ? (
+                      <Text style={s.courseNote}>הרשמה מול בית הספר</Text>
                     ) : (
                       <TouchableOpacity
                         style={[s.enrollBtn, isFull && s.enrollBtnFull]}
@@ -396,6 +412,12 @@ const makeStyles = (C) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   content: { paddingBottom: 40 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', paddingHorizontal: 20, marginBottom: 16 },
+
+  // כמות כדורים ותכני האימון — אותה שפה ויזואלית כמו במסך "האימונים שלי"
+  ammoRow: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 5, marginTop: 6 },
+  ammoValue: { fontSize: 16, fontWeight: '800', color: C.accent2 },
+  ammoLabel: { fontSize: 11, color: C.muted },
+  cardNotes: { fontSize: 12, color: C.textSecondary, textAlign: 'right', marginTop: 6, lineHeight: 17 },
 
   // Segmented view selector
   segment: {

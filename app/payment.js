@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert,
+  View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
+import { Text } from '../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
