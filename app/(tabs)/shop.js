@@ -137,17 +137,27 @@ export default function ShopScreen() {
   const subscriptions = products.filter(p => p.is_subscription);
   const others = products.filter(p => !p.is_subscription);
 
+  /**
+   * ציוד נפתח בעמוד מוצר פנימי, ומשם יוצאים לעמוד המוצר באתר בדפדפן.
+   *
+   * ⚠️ עד 27/08/2026 הכפתור פתח את דף גרואו בחלון בתוך האפליקציה,
+   * ובדיוק בגלל זה אפל דחתה את 1.0.1 (הנחיה 1.1.3 — אסור לרכוש
+   * מוצרים הקשורים לנשק בתוך האפליקציה, כולל תצוגת אתר בתוכה).
+   * **אין להחזיר את /payment למסלול הציוד.** מנויים וכרטיסיות הם
+   * שירות ולא מוצר נשק, ואפל לא נגעה בהם — הם נשארים ב-/payment.
+   */
   const handleBuyGear = (item) => {
     if (!item.in_stock) return;
-    if (item.pay_url) {
-      router.push({ pathname: '/payment', params: { url: item.pay_url, name: item.name } });
-      return;
-    }
-    Alert.alert(item.name, 'הפריט זמין דרך המשרד. ניצור איתך קשר להסדרת הרכישה.');
+    router.push({ pathname: '/product', params: { id: item.id } });
   };
 
   const renderGearCard = (item) => (
-    <View key={item.id} style={[s.gearCard, !item.in_stock && s.gearCardOut]}>
+    <TouchableOpacity
+      key={item.id}
+      style={[s.gearCard, !item.in_stock && s.gearCardOut]}
+      onPress={() => router.push({ pathname: '/product', params: { id: item.id } })}
+      activeOpacity={0.8}
+    >
       <View style={s.gearImgWrap}>
         {item.image_url ? (
           <Image
@@ -190,7 +200,7 @@ export default function ShopScreen() {
           <Text style={s.gearOutText}>לא במלאי</Text>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderCard = (p) => {
