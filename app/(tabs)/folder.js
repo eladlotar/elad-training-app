@@ -252,7 +252,16 @@ export default function FolderScreen() {
           <View style={s.grid}>
             {docs.map(doc => (
               <TouchableOpacity key={doc.id} style={s.thumbCard} onPress={() => openDoc(doc)} activeOpacity={0.85}>
-                <Image source={{ uri: doc.url }} style={s.thumb} />
+                {doc.url ? (
+                  <Image source={{ uri: doc.url }} style={s.thumb} />
+                ) : (
+                  // קישור הצפייה נוצר בשרת ופג אחרי שעתיים. אם הוא לא הגיע,
+                  // המסמך עצמו שמור — רק התצוגה נכשלה. לא מרמזים על אובדן.
+                  <View style={[s.thumb, s.thumbMissing]}>
+                    <Ionicons name="image-outline" size={26} color={C.mutedLt} />
+                    <Text style={s.thumbMissingText}>לא נטען</Text>
+                  </View>
+                )}
                 <View style={s.thumbInfo}>
                   <Text style={s.thumbTitle} numberOfLines={1}>{doc.title || 'ללא כותרת'}</Text>
                   <Text style={s.thumbDate}>{fmtLabel(doc.created_at)}</Text>
@@ -289,7 +298,14 @@ export default function FolderScreen() {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
             >
-              <Image source={{ uri: viewDoc.url }} style={s.viewerImg} resizeMode="contain" />
+              {viewDoc.url ? (
+                <Image source={{ uri: viewDoc.url }} style={s.viewerImg} resizeMode="contain" />
+              ) : (
+                <View style={[s.viewerImg, s.thumbMissing]}>
+                  <Ionicons name="image-outline" size={40} color={C.mutedLt} />
+                  <Text style={s.thumbMissingText}>לא הצלחנו לטעון את התמונה. נסה לרענן.</Text>
+                </View>
+              )}
               <Text style={s.viewerDate}>נשמר: {fmtLabel(viewDoc.created_at)}</Text>
               <Text style={s.viewerLabel}>כותרת</Text>
               <TextInput style={s.viewerInput} value={editTitle} onChangeText={setEditTitle}
@@ -327,6 +343,8 @@ const makeStyles = (C) => StyleSheet.create({
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: GAP, marginTop: 18 },
   thumbCard: { width: THUMB, borderRadius: 12, backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
   thumb: { width: '100%', height: THUMB, backgroundColor: C.borderLt },
+  thumbMissing: { alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.borderLt },
+  thumbMissingText: { fontSize: 11, color: C.muted, textAlign: 'center', paddingHorizontal: 8 },
   thumbInfo: { padding: 8, alignItems: 'flex-end' },
   thumbTitle: { fontSize: 12, fontWeight: '700', color: C.text, width: '100%', textAlign: 'right' },
   thumbDate: { fontSize: 10, color: C.muted, marginTop: 2 },
