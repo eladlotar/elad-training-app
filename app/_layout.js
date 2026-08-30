@@ -17,7 +17,6 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="payment" options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="product" />
         <Stack.Screen name="terms" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="privacy" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
