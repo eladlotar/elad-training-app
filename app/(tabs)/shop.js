@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  View, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Image,
+  View, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking,
 } from 'react-native';
 import { Text } from '../../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,17 +8,26 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getProducts,
-  getStoreProducts,
   getMySubscription,
   requestSubscription,
   cancelSubscriptionRequest,
 } from '../../src/services/subscription';
 import { useTheme } from '../../src/context/ThemeContext';
 
-/** האם למוצר יש מחיר מנוי נמוך מהרגיל. הזכאות עצמה נקבעת בשרת. */
-function gearDiscounted(item) {
-  return !!item.discount_eligible && Number(item.subscriber_price) < Number(item.price);
-}
+/**
+ * חנות הציוד יצאה מהאפליקציה — 31/08/2026.
+ *
+ * אפל דחתה את האפליקציה ארבע פעמים על הנחיה 1.1.3. שלושת התיקונים
+ * הראשונים נגעו ביעד הקישור, ולא זה מה שהפריע לה: כל 25 פריטי הציוד
+ * הם נרתיקים, נשאי מחסניות ותיקי נשק — "חלקי נשק" בעיניה — והלשונית
+ * עצמה הייתה חנות מלאה עם מחירים, מחיר מנוי ותגיות מלאי. אפל דורשת
+ * להסיר כל יכולת שמאפשרת רכישה, ומתירה במפורש רק "קישור למוצר
+ * שנפתח בדפדפן ברירת המחדל".
+ *
+ * ⚠️ אין להחזיר קטלוג ציוד, מסך מוצר או מחירי ציוד לאפליקציה.
+ * הקישור למטה הוא הצורה היחידה שאפל אישרה.
+ */
+const GEAR_SHOP_URL = 'https://eladlotar.com/shop/';
 
 function quotaLabel(quota) {
   if (!quota) return null;
@@ -41,31 +50,17 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [products, setProducts] = useState([]);
-  const [gear, setGear] = useState([]);
-  // זכאות להנחת מנוי — מגיעה מהשרת בלבד, יחד עם הקטלוג
-  const [isSubscriber, setIsSubscriber] = useState(false);
-  // 'services' = memberships (Product) · 'gear' = equipment (StoreProduct)
-  const [tab, setTab] = useState('services');
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState(null);
 
   const loadData = async () => {
-    // The two catalogues are independent: a failure in one must not blank the
-    // other, so they settle separately rather than in a single try block.
-    const [svc, eq] = await Promise.allSettled([getProducts(), getStoreProducts()]);
-    if (svc.status === 'fulfilled') {
-      setProducts(svc.value);
+    try {
+      setProducts(await getProducts());
       setLoadError(false);
-    } else {
+    } catch {
       setLoadError(true);
-    }
-    if (eq.status === 'fulfilled') {
-      setGear(eq.value.products);
-      setIsSubscriber(eq.value.isSubscriber);
-    } else {
-      setGear([]);
     }
     setLoaded(true);
   };
@@ -134,74 +129,17 @@ export default function ShopScreen() {
     ]);
   };
 
-  const subscriptions = products.filter(p => p.is_subscription);
-  const others = products.filter(p => !p.is_subscription);
-
-  /**
-   * ציוד נפתח בעמוד מוצר פנימי, ומשם יוצאים לעמוד המוצר באתר בדפדפן.
-   *
-   * ⚠️ עד 27/08/2026 הכפתור פתח את דף גרואו בחלון בתוך האפליקציה,
-   * ובדיוק בגלל זה אפל דחתה את 1.0.1 (הנחיה 1.1.3 — אסור לרכוש
-   * מוצרים הקשורים לנשק בתוך האפליקציה, כולל תצוגת אתר בתוכה).
-   * **אין להחזיר את /payment למסלול הציוד.** מנויים וכרטיסיות הם
-   * שירות ולא מוצר נשק, ואפל לא נגעה בהם — הם נשארים ב-/payment.
-   */
-  const handleBuyGear = (item) => {
-    if (!item.in_stock) return;
-    router.push({ pathname: '/product', params: { id: item.id } });
+  /** יציאה לדפדפן החיצוני. לא להחליף ב-WebView ולא ב-router.push. */
+  const openGearShop = async () => {
+    try {
+      await Linking.openURL(GEAR_SHOP_URL);
+    } catch {
+      Alert.alert('לא ניתן לפתוח את הדפדפן', GEAR_SHOP_URL);
+    }
   };
 
-  const renderGearCard = (item) => (
-    <TouchableOpacity
-      key={item.id}
-      style={[s.gearCard, !item.in_stock && s.gearCardOut]}
-      onPress={() => router.push({ pathname: '/product', params: { id: item.id } })}
-      activeOpacity={0.8}
-    >
-      <View style={s.gearImgWrap}>
-        {item.image_url ? (
-          <Image
-            source={{ uri: item.image_url }}
-            style={[s.gearImg, !item.in_stock && s.gearImgOut]}
-            resizeMode="cover"
-          />
-        ) : (
-          <Ionicons name="cube-outline" size={26} color={C.mutedLt} />
-        )}
-        {!item.in_stock && (
-          <View style={s.outBadge}><Text style={s.outBadgeText}>אזל</Text></View>
-        )}
-      </View>
-      <Text style={s.gearName} numberOfLines={2}>{item.name}</Text>
-      {/* מחיר המנוי מגיע מוכן מהשרת — המסך לא מחשב אחוזים ולא מחליט מי מנוי.
-          מי שאינו מנוי רואה כמה היה חוסך, כך שכל כרטיס הוא סיבה להצטרף. */}
-      {!isSubscriber && gearDiscounted(item) ? (
-        <Text style={s.gearSubHint}>
-          למנויים {item.subscriber_price} ש"ח
-        </Text>
-      ) : null}
-      {isSubscriber && gearDiscounted(item) && !item.subscriber_checkout_ready ? (
-        <Text style={s.gearSubWarn}>ההנחה תוסדר מולנו בעת הרכישה</Text>
-      ) : null}
-      <View style={s.gearFooter}>
-        <View style={s.gearPriceWrap}>
-          <Text style={s.gearPrice}>
-            {isSubscriber && gearDiscounted(item) ? item.subscriber_price : item.price} ש"ח
-          </Text>
-          {isSubscriber && gearDiscounted(item) ? (
-            <Text style={s.gearOldPrice}>{item.price}</Text>
-          ) : null}
-        </View>
-        {item.in_stock ? (
-          <TouchableOpacity style={s.gearBuyBtn} onPress={() => handleBuyGear(item)} activeOpacity={0.7}>
-            <Text style={s.gearBuyText}>לרכישה</Text>
-          </TouchableOpacity>
-        ) : (
-          <Text style={s.gearOutText}>לא במלאי</Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+  const subscriptions = products.filter(p => p.is_subscription);
+  const others = products.filter(p => !p.is_subscription);
 
   const renderCard = (p) => {
     const isBusy = busyId === p.id;
@@ -308,19 +246,6 @@ export default function ShopScreen() {
     >
       <Text style={s.title}>החנות</Text>
 
-      <View style={s.tabs}>
-        <TouchableOpacity
-          style={[s.tab, tab === 'services' && s.tabOn]}
-          onPress={() => setTab('services')} activeOpacity={0.8}>
-          <Text style={[s.tabText, tab === 'services' && s.tabTextOn]}>מנויים</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.tab, tab === 'gear' && s.tabOn]}
-          onPress={() => setTab('gear')} activeOpacity={0.8}>
-          <Text style={[s.tabText, tab === 'gear' && s.tabTextOn]}>ציוד</Text>
-        </TouchableOpacity>
-      </View>
-
       {!loaded ? (
         <View style={s.emptyCard}>
           <ActivityIndicator size="large" color={C.black} />
@@ -349,49 +274,35 @@ export default function ShopScreen() {
         </View>
       ) : (
         <>
-          {tab === 'services' ? (
-            <>
-              {subscriptions.length > 0 && (
-                <View style={s.section}>
-                  <Text style={s.sectionTitle}>מנויים חודשיים</Text>
-                  {subscriptions.map(renderCard)}
-                  <TouchableOpacity onPress={() => router.push('/terms')} activeOpacity={0.7}>
-                    <Text style={s.termsLink}>ההצטרפות למנוי כפופה לתקנון המנויים — לחצו לקריאה</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {others.length > 0 && (
-                <View style={s.section}>
-                  <Text style={s.sectionTitle}>מוצרים נוספים</Text>
-                  {others.map(renderCard)}
-                </View>
-              )}
-            </>
-          ) : gear.length === 0 ? (
-            <View style={s.emptyCard}>
-              <View style={s.iconWrap}>
-                <Ionicons name="cube-outline" size={34} color={C.white} />
-              </View>
-              <Text style={s.emptyTitle}>אין ציוד זמין כרגע</Text>
-              <Text style={s.emptyText}>הקטלוג מתעדכן מהמשרד. שווה לחזור לבדוק.</Text>
+          {subscriptions.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>מנויים חודשיים</Text>
+              {subscriptions.map(renderCard)}
+              <TouchableOpacity onPress={() => router.push('/terms')} activeOpacity={0.7}>
+                <Text style={s.termsLink}>ההצטרפות למנוי כפופה לתקנון המנויים — לחצו לקריאה</Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            /* One section per category; the server already sorts by category,
-               then in-stock, then price. */
-            Object.entries(
-              gear.reduce((acc, it) => {
-                (acc[it.category_label] ||= []).push(it);
-                return acc;
-              }, {})
-            ).map(([label, items]) => (
-              <View key={label} style={s.section}>
-                <Text style={s.sectionTitle}>{label}</Text>
-                <View style={s.gearGrid}>{items.map(renderGearCard)}</View>
-              </View>
-            ))
+          )}
+          {others.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>מוצרים נוספים</Text>
+              {others.map(renderCard)}
+            </View>
           )}
         </>
       )}
+
+      {/* קישור בלבד. אין כאן קטלוג, מחירים או מלאי — ראה ההערה בראש הקובץ. */}
+      <TouchableOpacity style={s.gearLinkCard} onPress={openGearShop} activeOpacity={0.8}>
+        <View style={s.gearLinkIcon}>
+          <Ionicons name="open-outline" size={20} color={C.white} />
+        </View>
+        <View style={s.gearLinkText}>
+          <Text style={s.gearLinkTitle}>חנות הציוד באתר</Text>
+          <Text style={s.gearLinkSub}>נרתיקים, נשאי מחסניות וציוד נשיאה — נפתח בדפדפן</Text>
+        </View>
+        <Ionicons name="chevron-back" size={18} color={C.mutedLt} />
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -401,52 +312,21 @@ const makeStyles = (C) => StyleSheet.create({
   content: { padding: 20, paddingBottom: 40, flexGrow: 1 },
   title: { fontSize: 24, fontWeight: '800', color: C.text, textAlign: 'right', marginBottom: 16 },
 
-  tabs: {
-    flexDirection: 'row-reverse', backgroundColor: C.cardAlt,
-    borderRadius: 10, padding: 3, marginBottom: 18,
-  },
-  tab: { flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center' },
-  tabOn: { backgroundColor: C.black },
-  tabText: { fontSize: 14, fontWeight: '700', color: C.textSecondary },
-  tabTextOn: { color: C.white },
+  balanceText: { fontSize: 13, fontWeight: '700', color: C.ok },
 
-  gearGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between' },
-  gearCard: {
-    width: '48%', backgroundColor: C.card, borderRadius: 12,
-    borderWidth: 1, borderColor: C.border, marginBottom: 12, overflow: 'hidden',
+  /* כרטיס הקישור לחנות הציוד באתר — קישור בודד, לא קטלוג. */
+  gearLinkCard: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 14, marginTop: 6,
   },
-  gearCardOut: { opacity: 0.72 },
-  gearImgWrap: {
-    height: 110, backgroundColor: C.accentLt,
+  gearLinkIcon: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: C.black,
     alignItems: 'center', justifyContent: 'center',
   },
-  gearImg: { width: '100%', height: '100%' },
-  gearImgOut: { opacity: 0.5 },
-  outBadge: {
-    position: 'absolute', top: 8, right: 8,
-    backgroundColor: C.err, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
-  },
-  outBadgeText: { color: C.white, fontSize: 11, fontWeight: '700' },
-  gearName: {
-    fontSize: 12, fontWeight: '600', color: C.text, textAlign: 'right',
-    paddingHorizontal: 10, paddingTop: 9, minHeight: 46, lineHeight: 17,
-  },
-  gearFooter: {
-    flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 10, paddingBottom: 10, paddingTop: 2,
-  },
-  balanceText: { fontSize: 13, fontWeight: '700', color: C.ok },
-  gearPrice: { fontSize: 15, fontWeight: '800', color: C.black },
-  gearPriceWrap: { flexDirection: 'row-reverse', alignItems: 'baseline', gap: 5 },
-  gearOldPrice: { fontSize: 12, color: C.mutedLt, textDecorationLine: 'line-through' },
-  gearSubHint: { fontSize: 10.5, color: C.accent2, textAlign: 'right', marginTop: 3 },
-  gearSubWarn: { fontSize: 10.5, color: C.warn, textAlign: 'right', marginTop: 3, lineHeight: 15 },
-  gearBuyBtn: {
-    backgroundColor: C.black, borderRadius: 7,
-    paddingHorizontal: 12, paddingVertical: 6,
-  },
-  gearBuyText: { color: C.white, fontSize: 12, fontWeight: '700' },
-  gearOutText: { fontSize: 11, fontWeight: '600', color: C.muted },
+  gearLinkText: { flex: 1 },
+  gearLinkTitle: { fontSize: 15, fontWeight: '700', color: C.text, textAlign: 'right' },
+  gearLinkSub: { fontSize: 12, color: C.textSecondary, textAlign: 'right', marginTop: 2, lineHeight: 17 },
 
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: C.text, textAlign: 'right', marginBottom: 10 },

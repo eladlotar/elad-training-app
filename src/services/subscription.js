@@ -12,23 +12,11 @@ function serverError(result, fallback) {
 }
 
 /**
- * Equipment catalogue (StoreProduct) — the physical gear tab of the shop.
- * Shares its images, prices and Grow links with the public website, so those
- * change without an app update. `in_stock` is a boolean; exact stock counts
- * stay server-side.
+ * קטלוג הציוד הוסר מהאפליקציה ב-31/08/2026 (הנחיה 1.1.3 של אפל).
+ * הנקודה `getStoreProducts` עדיין חיה בשרת ומשרתת את האתר —
+ * האפליקציה פשוט לא קוראת לה יותר. אין להחזיר אותה לכאן.
  */
-export async function getStoreProducts() {
-  const token = await getToken();
-  if (!token) throw new Error('יש להתחבר מחדש');
-  const result = await callFunction('mobileAppApi', { action: 'getStoreProducts', token });
-  if (!result.ok) throw serverError(result, 'שגיאה בטעינת הציוד');
-  // הזכאות להנחת מנוי נקבעת בשרת בלבד — הלקוח לא יכול להצהיר על עצמו כמנוי.
-  return {
-    products: result.products || [],
-    isSubscriber: !!result.is_subscriber,
-    discountPct: result.subscriber_discount_pct || 0,
-  };
-}
+
 
 /** Shop catalog: products + owned/pending flags for this customer. */
 export async function getProducts() {

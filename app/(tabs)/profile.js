@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  View, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform,
+  View, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, Linking,
 } from 'react-native';
 import { Text, TextInput } from '../../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { getUser, refreshMe, updateProfile, logout } from '../../src/services/auth';
 import { getUserLevel } from '../../src/constants/levels';
 import { useTheme } from '../../src/context/ThemeContext';
+
+/**
+ * שני כלי ההתאמה חיים באתר ונפתחים בדפדפן החיצוני — 31/08/2026.
+ *
+ * הם לא נבנו לתוך האפליקציה בכוונה. אפל דחתה אותנו ארבע פעמים על
+ * הנחיה 1.1.3 (רכישת נשק וחלקי נשק בתוך האפליקציה), ופסלה אפילו
+ * נרתיקים כ"חלקי נשק". שאלון שממליץ איזה אקדח או איזו כוונת לקנות
+ * הוא המלצת רכישה מובהקת, ובתוך האפליקציה הוא דחייה מובטחת.
+ *
+ * ⚠️ אין להטמיע את השאלונים במסך פנימי ואין לפתוח אותם ב-WebView.
+ * קישור שיוצא לדפדפן הוא הצורה היחידה שאפל אישרה במפורש.
+ */
+const GUIDE_LINKS = [
+  {
+    key: 'pistols',
+    url: 'https://eladlotar.com/pistols/',
+    icon: 'help-circle-outline',
+    title: 'שאלון התאמת אקדח',
+    sub: '11 שאלות · מדריך מקצועי באתר',
+  },
+  {
+    key: 'optics',
+    url: 'https://eladlotar.com/optics/',
+    icon: 'radio-button-on-outline',
+    title: 'שאלון התאמת כוונת השלכה',
+    sub: 'מותאם לתבנית ההרכבה של האקדח שלך',
+  },
+];
 
 // Preferred training day — the server stores an English enum
 // (Customer.preferred_training_day: sunday..saturday) and returns it as
@@ -102,6 +130,15 @@ export default function ProfileScreen() {
       Alert.alert('שגיאה', e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** יציאה לדפדפן החיצוני. לא להחליף ב-WebView ולא במסך פנימי. */
+  const openGuide = async (url) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('לא ניתן לפתוח את הדפדפן', url);
     }
   };
 
@@ -311,6 +348,28 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* כלי התאמה — קישורים בלבד, נפתחים בדפדפן. ראה ההערה בראש הקובץ. */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>כלי התאמה</Text>
+        {GUIDE_LINKS.map((g, i) => (
+          <TouchableOpacity
+            key={g.key}
+            style={[s.guideCard, i > 0 && s.guideCardGap]}
+            onPress={() => openGuide(g.url)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="open-outline" size={17} color={C.mutedLt} />
+            <View style={s.guideInfo}>
+              <Text style={s.guideTitle}>{g.title}</Text>
+              <Text style={s.guideSub}>{g.sub}</Text>
+            </View>
+            <View style={s.guideIcon}>
+              <Ionicons name={g.icon} size={21} color={C.white} />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {/* Logout */}
       <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
         <Text style={s.logoutText}>התנתקות</Text>
@@ -408,6 +467,19 @@ const makeStyles = (C) => StyleSheet.create({
   cancelEditBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 4 },
   cancelEditText: { fontSize: 13, color: C.muted, textDecorationLine: 'underline' },
 
+  guideCard: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+    backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 13,
+  },
+  guideCardGap: { marginTop: 10 },
+  guideInfo: { flex: 1 },
+  guideTitle: { fontSize: 15, fontWeight: '700', color: C.text, textAlign: 'right' },
+  guideSub: { fontSize: 12, color: C.textSecondary, textAlign: 'right', marginTop: 2, lineHeight: 17 },
+  guideIcon: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: C.black,
+    alignItems: 'center', justifyContent: 'center',
+  },
   logoutBtn: {
     backgroundColor: C.bg,
     borderRadius: 10,

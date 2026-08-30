@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# גיבויים מקומיים לפני שינויים — לא נכנסים לבנייה
+.backups/
