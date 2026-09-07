@@ -174,15 +174,20 @@ export default function SessionsScreen() {
   };
 
   // ── Month grid ──────────────────────────────────────────────────────────
-  const monthGrid = useMemo(() => {
+  // מחזיר שבועות שלמים של 7 ימים, ולא מערך שטוח שנשען על גלישה אוטומטית.
+  // גלישה עם רוחב תא באחוזים (7 × 14.2857%) מתעגלת כלפי מעלה באנדרואיד,
+  // ואז נכנסים רק 6 תאים בשורה וכל התאריכים זזים ליום שגוי.
+  const monthWeeks = useMemo(() => {
     const first = new Date(viewYear, viewMonth, 1);
-    const startPad = first.getDay(); // 0=Sunday
+    const startPad = first.getDay(); // 0=ראשון
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
     const cells = [];
     for (let i = 0; i < startPad; i++) cells.push(null);
     for (let d = 1; d <= daysInMonth; d++) cells.push(dateToStr(new Date(viewYear, viewMonth, d)));
     while (cells.length % 7 !== 0) cells.push(null);
-    return cells;
+    const weeks = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+    return weeks;
   }, [viewYear, viewMonth]);
 
   const prevMonth = () => { if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); } else setViewMonth(m => m - 1); };
@@ -246,20 +251,28 @@ export default function SessionsScreen() {
             {HEB_DAYS_SHORT.map((d, i) => <Text key={i} style={s.weekHeaderCell}>{d}</Text>)}
           </View>
           <View style={s.monthGrid}>
-            {monthGrid.map((ds, i) => {
-              if (!ds) return <View key={i} style={s.monthCell} />;
-              const isSel = ds === selectedDate;
-              const isToday = ds === todayStr;
-              const hasSession = sessionDateSet.has(ds);
-              return (
-                <TouchableOpacity key={i} style={s.monthCell} onPress={() => setSelectedDate(ds)} activeOpacity={0.6}>
-                  <View style={[s.monthDayInner, isSel && s.monthDaySel, isToday && !isSel && s.monthDayToday]}>
-                    <Text style={[s.monthDayNum, isSel && s.monthDayNumSel]}>{parseStr(ds).getDate()}</Text>
-                  </View>
-                  {hasSession && <View style={[s.monthDot, isSel && s.monthDotSel]} />}
-                </TouchableOpacity>
-              );
-            })}
+            {monthWeeks.map((week, wi) => (
+              <View key={wi} style={s.monthWeekRow}>
+                {week.map((ds, i) => {
+                  if (!ds) return <View key={i} style={s.monthCell} />;
+                  const isSel = ds === selectedDate;
+                  const isToday = ds === todayStr;
+                  const hasSession = sessionDateSet.has(ds);
+                  return (
+                    <TouchableOpacity key={i} style={s.monthCell} onPress={() => setSelectedDate(ds)} activeOpacity={0.6}>
+                      {/* יום עם אימון = עיגול מלא בצבע הראשי והמספר בלבן.
+                          יום נבחר = טבעת מסביב לעיגול. היום = רקע עדין, או נקודה מתחת אם יש בו אימון. */}
+                      <View style={[s.monthDayRing, isSel && s.monthDayRingSel]}>
+                        <View style={[s.monthDayInner, isToday && !hasSession && s.monthDayToday, hasSession && s.monthDayHasSession]}>
+                          <Text style={[s.monthDayNum, hasSession && s.monthDayNumHasSession, isSel && !hasSession && s.monthDayNumSel]}>{parseStr(ds).getDate()}</Text>
+                        </View>
+                      </View>
+                      {isToday && hasSession && <View style={s.monthDot} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
           </View>
         </View>
       )}
@@ -287,8 +300,10 @@ export default function SessionsScreen() {
                   onPress={() => setSelectedDate(day.date)} activeOpacity={0.6}
                 >
                   <Text style={[s.dayName, isSel && s.dayNameSelected]}>{day.dayName}</Text>
-                  <Text style={[s.dayNum, isSel && s.dayNumSelected]}>{day.dayNum}</Text>
-                  {hasSession && <View style={[s.dot, isSel && s.dotSelected]} />}
+                  {/* יום עם אימון = המספר בתוך עיגול מלא. בתא נבחר (רקע כהה) העיגול לבן והמספר כהה. */}
+                  <View style={[s.dayNumWrap, hasSession && !isSel && s.dayNumWrapSession, hasSession && isSel && s.dayNumWrapSessionSel]}>
+                    <Text style={[s.dayNum, isSel && s.dayNumSelected, hasSession && !isSel && s.dayNumSession, hasSession && isSel && s.dayNumSessionSel]}>{day.dayNum}</Text>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -450,15 +465,20 @@ const makeStyles = (C) => StyleSheet.create({
   monthTitle: { fontSize: 16, fontWeight: '800', color: C.text },
   weekHeader: { flexDirection: 'row-reverse', marginBottom: 6 },
   weekHeaderCell: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: C.mutedLt },
-  monthGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap' },
-  monthCell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
-  monthDayInner: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  monthDaySel: { backgroundColor: C.black },
+  monthGrid: {},
+  // שורת שבוע אחת = 7 תאים בדיוק, בחלוקה שווה. בלי גלישה ובלי אחוזים,
+  // כדי שכותרת הימים והתאריכים יישבו תמיד על אותן עמודות.
+  monthWeekRow: { flexDirection: 'row-reverse' },
+  monthCell: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  monthDayRing: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  monthDayRingSel: { borderColor: C.black },
+  monthDayInner: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  monthDayHasSession: { backgroundColor: C.black },
   monthDayToday: { backgroundColor: C.cardAlt },
   monthDayNum: { fontSize: 14, fontWeight: '600', color: C.text },
-  monthDayNumSel: { color: C.white, fontWeight: '800' },
+  monthDayNumHasSession: { color: C.white, fontWeight: '800' },
+  monthDayNumSel: { color: C.black, fontWeight: '800' },
   monthDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.black, marginTop: 2 },
-  monthDotSel: { backgroundColor: C.black },
 
   // Day view header
   dayViewTitle: { fontSize: 16, fontWeight: '800', color: C.text, textAlign: 'center' },
@@ -471,10 +491,13 @@ const makeStyles = (C) => StyleSheet.create({
   dayCellToday: { backgroundColor: C.cardAlt },
   dayName: { fontSize: 12, color: C.muted, fontWeight: '600', marginBottom: 4 },
   dayNameSelected: { color: C.white },
+  dayNumWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  dayNumWrapSession: { backgroundColor: C.black },
+  dayNumWrapSessionSel: { backgroundColor: C.white },
   dayNum: { fontSize: 18, fontWeight: '700', color: C.text },
   dayNumSelected: { color: C.white },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.text, marginTop: 4 },
-  dotSelected: { backgroundColor: C.white },
+  dayNumSession: { color: C.white, fontWeight: '800' },
+  dayNumSessionSel: { color: C.black, fontWeight: '800' },
 
   // Sessions list
   sessionsList: { paddingHorizontal: 20, marginTop: 10 },
