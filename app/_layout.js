@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider } from '../src/context/ThemeContext';
+import UpdatePrompt from '../src/components/UpdatePrompt';
 
 export default function RootLayout() {
   return (
@@ -20,6 +21,8 @@ export default function RootLayout() {
         <Stack.Screen name="terms" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="privacy" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
+      {/* חלון "יש גרסה חדשה" — בודק מול האפ סטור בכל הפעלה. */}
+      <UpdatePrompt />
     </ThemeProvider>
   );
 }
