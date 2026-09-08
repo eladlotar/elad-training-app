@@ -90,6 +90,9 @@ export default function SessionsScreen() {
     no_credit: 'נגמרו הקרדיטים במנוי שלך. לחידוש פנה אלינו.',
     debt: 'יש חוב פתוח על המנוי. יש להסדיר תשלום מול בית הספר.',
     quota_exceeded: 'ניצלת את מכסת האימונים החודשית במנוי.',
+    // מנוי שנרכש עם התחלה עתידית (start=next_month) — השרת מחזיר
+    // not_started, וללא המפתח הזה האפליקציה הציעה הרשמה שתמיד נכשלת בשרת.
+    not_started: 'המנוי שלך עדיין לא נפתח. ההרשמה תיפתח במועד תחילת המנוי.',
     // חוק תדירות במנוי (נוסף 03/08/2026). ההודעה המדויקת עם המספרים
     // מגיעה מהשרת בכשל הרשמה; כאן זו החסימה המוקדמת מתוך היומן.
     rule_limit: 'המנוי שלך מגביל את מספר ההרשמות לאימון מהסוג הזה בתקופה הזו.',
@@ -136,8 +139,10 @@ export default function SessionsScreen() {
               Alert.alert('נרשמת!', session.title);
               await loadData();
             } catch (e) {
-              // Map a server block_reason if present, else show the message
-              const msg = BLOCK_MSG[e.error_code] || e.message;
+              // הודעת השרת קודמת למילון: היא נושאת את הפרטים המדויקים
+              // (תאריך פתיחת המנוי ב-not_started, המספרים ב-rule_limit).
+              // המילון נשאר כגיבוי לכשל בלי טקסט.
+              const msg = e.message || BLOCK_MSG[e.error_code];
               Alert.alert('לא ניתן להירשם', msg);
             } finally { setEnrolling(null); }
           },
@@ -262,8 +267,10 @@ export default function SessionsScreen() {
                     <TouchableOpacity key={i} style={s.monthCell} onPress={() => setSelectedDate(ds)} activeOpacity={0.6}>
                       {/* יום עם אימון = עיגול מלא בצבע הראשי והמספר בלבן.
                           יום נבחר = טבעת מסביב לעיגול. היום = רקע עדין, או נקודה מתחת אם יש בו אימון. */}
-                      <View style={[s.monthDayRing, isSel && s.monthDayRingSel]}>
-                        <View style={[s.monthDayInner, isToday && !hasSession && s.monthDayToday, hasSession && s.monthDayHasSession]}>
+                      {/* collapsable={false}: באנדרואיד תצוגה עם מסגרת שקופה "נמעכת" לתוך ההורה,
+                          והעיגול הפנימי מאבד את העיגול ומצויר כריבוע. */}
+                      <View collapsable={false} style={[s.monthDayRing, isSel && s.monthDayRingSel]}>
+                        <View collapsable={false} style={[s.monthDayInner, isToday && !hasSession && s.monthDayToday, hasSession && s.monthDayHasSession]}>
                           <Text style={[s.monthDayNum, hasSession && s.monthDayNumHasSession, isSel && !hasSession && s.monthDayNumSel]}>{parseStr(ds).getDate()}</Text>
                         </View>
                       </View>
@@ -301,7 +308,7 @@ export default function SessionsScreen() {
                 >
                   <Text style={[s.dayName, isSel && s.dayNameSelected]}>{day.dayName}</Text>
                   {/* יום עם אימון = המספר בתוך עיגול מלא. בתא נבחר (רקע כהה) העיגול לבן והמספר כהה. */}
-                  <View style={[s.dayNumWrap, hasSession && !isSel && s.dayNumWrapSession, hasSession && isSel && s.dayNumWrapSessionSel]}>
+                  <View collapsable={false} style={[s.dayNumWrap, hasSession && !isSel && s.dayNumWrapSession, hasSession && isSel && s.dayNumWrapSessionSel]}>
                     <Text style={[s.dayNum, isSel && s.dayNumSelected, hasSession && !isSel && s.dayNumSession, hasSession && isSel && s.dayNumSessionSel]}>{day.dayNum}</Text>
                   </View>
                 </TouchableOpacity>
@@ -472,7 +479,7 @@ const makeStyles = (C) => StyleSheet.create({
   monthCell: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
   monthDayRing: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
   monthDayRingSel: { borderColor: C.black },
-  monthDayInner: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  monthDayInner: { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   monthDayHasSession: { backgroundColor: C.black },
   monthDayToday: { backgroundColor: C.cardAlt },
   monthDayNum: { fontSize: 14, fontWeight: '600', color: C.text },
@@ -491,7 +498,7 @@ const makeStyles = (C) => StyleSheet.create({
   dayCellToday: { backgroundColor: C.cardAlt },
   dayName: { fontSize: 12, color: C.muted, fontWeight: '600', marginBottom: 4 },
   dayNameSelected: { color: C.white },
-  dayNumWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  dayNumWrap: { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   dayNumWrapSession: { backgroundColor: C.black },
   dayNumWrapSessionSel: { backgroundColor: C.white },
   dayNum: { fontSize: 18, fontWeight: '700', color: C.text },
