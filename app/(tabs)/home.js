@@ -10,6 +10,7 @@ import { getUser, refreshMe } from '../../src/services/auth';
 import { getSessions, getNextSession, getMyEnrollments } from '../../src/services/sessions';
 import { getUserLevel, LEVELS } from '../../src/constants/levels';
 import { parseLocalDate } from '../../src/utils/date';
+import { DEFAULT_VENUE } from '../../src/constants/venue';
 import { useTheme } from '../../src/context/ThemeContext';
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -107,14 +108,14 @@ export default function HomeScreen() {
     date: nextEnrollment.session_date,
     time: nextEnrollment.session_time || '',
     timeEnd: '',
-    location: nextEnrollment.session_location || '',
+    location: nextEnrollment.session_location || DEFAULT_VENUE,
     instructor: nextEnrollment.instructor_name || '',
   } : nextSession ? {
     title: nextSession.title,
     date: nextSession.date,
     time: nextSession.start_time,
     timeEnd: nextSession.end_time,
-    location: nextSession.location,
+    location: nextSession.location || DEFAULT_VENUE,
     instructor: nextSession.instructor_name,
   } : null;
   const nextDate = next ? parseLocalDate(next.date) : null;
@@ -318,6 +319,7 @@ export default function HomeScreen() {
             <View key={e.id} style={s.enrollCard}>
               <Text style={s.enrollTitle}>{e.session_title}</Text>
               <Text style={s.enrollMeta}>{e.session_date} | {e.session_time}</Text>
+              <Text style={s.enrollMeta}>{e.session_location || DEFAULT_VENUE}</Text>
             </View>
           ))}
         </View>

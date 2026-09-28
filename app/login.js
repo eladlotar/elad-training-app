@@ -7,6 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { requestOtp, verifyOtp, registerUser } from '../src/services/auth';
 import { C } from '../src/constants/theme';
+import ExpiryMonthPicker from '../src/components/ExpiryMonthPicker';
+
+// יומן היורים נכתב בעברית, ולכן גם השם. מותרים רווח, מקף וגרש.
+const HEBREW_NAME_RE = /^[א-ת][א-ת\s'"׳״\-–—]*$/;
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -17,7 +21,8 @@ export default function LoginScreen() {
   const otpRef = useRef(null);
 
   // Registration fields
-  const [regName, setRegName] = useState('');
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
   const [regIdNumber, setRegIdNumber] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regLicenseType, setRegLicenseType] = useState('');
@@ -64,8 +69,14 @@ export default function LoginScreen() {
   };
 
   const handleRegister = async () => {
-    if (!regName.trim()) {
-      Alert.alert('שגיאה', 'יש להזין שם מלא');
+    const firstName = regFirstName.trim();
+    const lastName = regLastName.trim();
+    if (!firstName || !lastName) {
+      Alert.alert('שגיאה', 'יש להזין שם פרטי ושם משפחה');
+      return;
+    }
+    if (!HEBREW_NAME_RE.test(firstName) || !HEBREW_NAME_RE.test(lastName)) {
+      Alert.alert('שגיאה', 'יש להזין את השם באותיות עברית — כך הוא נרשם ביומן היורים');
       return;
     }
     if (!regIdNumber.trim() || regIdNumber.trim().length < 7) {
@@ -75,7 +86,9 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await registerUser({
-        full_name: regName.trim(),
+        first_name: firstName,
+        last_name: lastName,
+        full_name: `${firstName} ${lastName}`,
         id_number: regIdNumber.trim(),
         email: regEmail.trim(),
         license_type: regLicenseType.trim() || undefined,
@@ -177,15 +190,25 @@ export default function LoginScreen() {
             <Text style={s.stepTitle}>הרשמה</Text>
             <Text style={s.hint}>פעם ראשונה? נשלים כמה פרטים</Text>
 
-            <Text style={s.label}>שם מלא *</Text>
+            <Text style={s.label}>שם פרטי (בעברית) *</Text>
             <TextInput
               style={s.input}
-              placeholder="שם פרטי ומשפחה"
+              placeholder="ישראל"
               placeholderTextColor={C.mutedLt}
               textAlign="right"
-              value={regName}
-              onChangeText={setRegName}
+              value={regFirstName}
+              onChangeText={setRegFirstName}
               autoFocus
+            />
+
+            <Text style={s.label}>שם משפחה (בעברית) *</Text>
+            <TextInput
+              style={s.input}
+              placeholder="ישראלי"
+              placeholderTextColor={C.mutedLt}
+              textAlign="right"
+              value={regLastName}
+              onChangeText={setRegLastName}
             />
 
             <Text style={s.label}>תעודת זהות *</Text>
@@ -224,15 +247,12 @@ export default function LoginScreen() {
               onChangeText={setRegLicenseType}
             />
 
-            <Text style={s.label}>תוקף רישיון</Text>
-            <TextInput
-              style={s.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={C.mutedLt}
-              textAlign="right"
+            {/* חודש ושנה בלבד, כמו שממלאים ביומן יורים — התוקף נשמר
+                תמיד ליום האחרון של אותו חודש. */}
+            <ExpiryMonthPicker
+              colors={C}
               value={regLicenseExpiry}
-              onChangeText={setRegLicenseExpiry}
-              maxLength={10}
+              onChange={setRegLicenseExpiry}
             />
 
             <TouchableOpacity

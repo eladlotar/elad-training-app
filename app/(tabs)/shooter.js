@@ -10,6 +10,9 @@ import { getUser, updateShooterProfile } from '../../src/services/auth';
 import { useTheme } from '../../src/context/ThemeContext';
 import { GUN_DB, MANUFACTURERS, OPTICS_DB, OPTICS_BRANDS, OTHER } from '../../src/constants/guns';
 
+// יומן היורים נכתב בעברית, ולכן גם השם. מותרים רווח, מקף וגרש.
+const HEBREW_NAME_RE = /^[א-ת][א-ת\s'"׳״\-–—]*$/;
+
 const HEB_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
 // Expiry = last day of the chosen month (Feb/leap handled by Date automatically)
@@ -52,6 +55,12 @@ export default function ShooterScreen() {
   const [hasOptic, setHasOptic] = useState(false);
   const [opticBrand, setOpticBrand] = useState('');
   const [opticModel, setOpticModel] = useState('');
+  // "אחר" בבורר = הקלדה חופשית. המצב נשמר בנפרד מהערך: כשהוא נגזר מהערך
+  // עצמו, שדה ההקלדה נעלם אחרי התו הראשון (משוב משתמשים 22/09/2026 — "כוונת חדשה: לא ניתן להוסיף").
+  const [manualMan, setManualMan] = useState(false);
+  const [manualModel, setManualModel] = useState(false);
+  const [manualOpticBrand, setManualOpticBrand] = useState(false);
+  const [manualOpticModel, setManualOpticModel] = useState(false);
   const [magCount, setMagCount] = useState('');
   const [magRounds, setMagRounds] = useState([]); // array of strings
   const [gear, setGear] = useState({});
@@ -72,11 +81,22 @@ export default function ShooterScreen() {
         setLicenseExpiry(u.license_expiry || u.weapon_license_expiry || '');
         setWeaponSerial(u.weapon_serial || u.weapon_serial_number || '');
         const eq = u.equipment || {};
-        setManufacturer(eq.gun_manufacturer || '');
-        setModel(eq.gun_model || '');
+        const gm = eq.gun_manufacturer || '';
+        const gmodel = eq.gun_model || '';
+        setManufacturer(gm);
+        setModel(gmodel);
+        // ערך שמור שלא נמצא ברשימות = הוקלד ידנית, ונפתח שוב כשדה הקלדה
+        const gmManual = !!gm && !GUN_DB[gm];
+        setManualMan(gmManual);
+        setManualModel(!!gmodel && !gmManual && !(GUN_DB[gm] || []).includes(gmodel));
         setHasOptic(!!eq.has_optic);
-        setOpticBrand(eq.optic_brand || '');
-        setOpticModel(eq.optic_model || '');
+        const ob = eq.optic_brand || '';
+        const om = eq.optic_model || '';
+        setOpticBrand(ob);
+        setOpticModel(om);
+        const obManual = !!ob && !OPTICS_DB[ob];
+        setManualOpticBrand(obManual);
+        setManualOpticModel(!!om && !obManual && !(OPTICS_DB[ob] || []).includes(om));
         const mags = Array.isArray(eq.magazines) ? eq.magazines : [];
         setMagCount(mags.length ? String(mags.length) : '');
         setMagRounds(mags.map(m => String(m ?? '')));
@@ -110,33 +130,43 @@ export default function ShooterScreen() {
   };
 
   const pickManufacturer = (m) => {
-    // OTHER → reveal a manual text field (works on iOS + Android)
-    setManufacturer(m === OTHER ? '__manual__' : m);
+    // "אחר" → שדה הקלדה חופשית (עובד באייפון ובאנדרואיד)
+    setManualMan(m === OTHER);
+    setManufacturer(m === OTHER ? '' : m);
     setModel('');
+    setManualModel(false);
     setPickerMode(null);
   };
 
   const pickModel = (m) => {
-    setModel(m === OTHER ? '__manual__' : m);
+    setManualModel(m === OTHER);
+    setModel(m === OTHER ? '' : m);
     setPickerMode(null);
   };
 
   const handleSave = async () => {
+    // השם נרשם ביומן היורים כפי שהוא, והיומן בעברית — לכן עברית בלבד.
+    const fn = firstName.trim();
+    const ln = lastName.trim();
+    if ((fn && !HEBREW_NAME_RE.test(fn)) || (ln && !HEBREW_NAME_RE.test(ln))) {
+      Alert.alert('שגיאה', 'יש להזין את השם באותיות עברית — כך הוא נרשם ביומן היורים');
+      return;
+    }
     setSaving(true);
     try {
       await updateShooterProfile({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
+        first_name: fn,
+        last_name: ln,
         national_id: nationalId.trim(),
         license_number: licenseNumber.trim(),
         license_expiry: licenseExpiry.trim(),
         weapon_serial: weaponSerial.trim(),
         equipment: {
-          gun_manufacturer: manufacturer === '__manual__' ? '' : manufacturer,
-          gun_model: model === '__manual__' ? '' : model,
+          gun_manufacturer: manufacturer.trim(),
+          gun_model: model.trim(),
           has_optic: hasOptic,
-          optic_brand: hasOptic ? (opticBrand === '__manual__' ? '' : opticBrand) : '',
-          optic_model: hasOptic ? (opticModel === '__manual__' ? '' : opticModel) : '',
+          optic_brand: hasOptic ? opticBrand.trim() : '',
+          optic_model: hasOptic ? opticModel.trim() : '',
           magazines: magRounds.map(r => parseInt(r) || 0),
           ...gear,
         },
@@ -151,11 +181,7 @@ export default function ShooterScreen() {
     return <View style={s.loader}><ActivityIndicator size="large" color={C.black} /></View>;
   }
 
-  const manualMan = manufacturer === '__manual__';
-  const manualModel = model === '__manual__';
   const models = (!manualMan && GUN_DB[manufacturer]) ? GUN_DB[manufacturer] : [];
-  const manualOpticBrand = opticBrand === '__manual__';
-  const manualOpticModel = opticModel === '__manual__';
   const opticModels = (!manualOpticBrand && OPTICS_DB[opticBrand]) ? OPTICS_DB[opticBrand] : [];
 
   const pickerList = pickerMode === 'manufacturer' ? MANUFACTURERS
@@ -165,8 +191,8 @@ export default function ShooterScreen() {
   const onPick = (item) => {
     if (pickerMode === 'manufacturer') pickManufacturer(item);
     else if (pickerMode === 'model') pickModel(item);
-    else if (pickerMode === 'optic_brand') { setOpticBrand(item === OTHER ? '__manual__' : item); setOpticModel(''); setPickerMode(null); }
-    else if (pickerMode === 'optic_model') { setOpticModel(item === OTHER ? '__manual__' : item); setPickerMode(null); }
+    else if (pickerMode === 'optic_brand') { setManualOpticBrand(item === OTHER); setOpticBrand(item === OTHER ? '' : item); setOpticModel(''); setManualOpticModel(false); setPickerMode(null); }
+    else if (pickerMode === 'optic_model') { setManualOpticModel(item === OTHER); setOpticModel(item === OTHER ? '' : item); setPickerMode(null); }
   };
   const pickerTitle = pickerMode === 'manufacturer' ? 'בחר יצרן'
     : pickerMode === 'model' ? 'בחר דגם'
@@ -197,8 +223,8 @@ export default function ShooterScreen() {
 
         {/* Personal + license */}
         <Text style={s.section}>פרטי יורה</Text>
-        <Field s={s} label="שם פרטי" value={firstName} onChangeText={setFirstName} />
-        <Field s={s} label="שם משפחה" value={lastName} onChangeText={setLastName} />
+        <Field s={s} label="שם פרטי (בעברית)" value={firstName} onChangeText={setFirstName} />
+        <Field s={s} label="שם משפחה (בעברית)" value={lastName} onChangeText={setLastName} />
         <Field s={s} label="מספר תעודת זהות" value={nationalId} onChangeText={setNationalId} keyboardType="number-pad" />
         <Field s={s} label="מספר רישיון נשק" value={licenseNumber} onChangeText={setLicenseNumber} />
 
@@ -225,8 +251,8 @@ export default function ShooterScreen() {
         </TouchableOpacity>
         {manualMan && (
           <TextInput style={s.input} placeholder="הקלד שם יצרן" placeholderTextColor={C.mutedLt}
-            value={manufacturer === '__manual__' ? '' : manufacturer}
-            onChangeText={(t) => setManufacturer(t || '__manual__')} textAlign="right" />
+            value={manufacturer}
+            onChangeText={setManufacturer} textAlign="right" />
         )}
 
         {(manufacturer && !manualMan) && (
@@ -242,8 +268,8 @@ export default function ShooterScreen() {
         )}
         {(manualMan || manualModel) && (
           <TextInput style={s.input} placeholder="הקלד דגם" placeholderTextColor={C.mutedLt}
-            value={model === '__manual__' ? '' : model}
-            onChangeText={(t) => setModel(t)} textAlign="right" />
+            value={model}
+            onChangeText={setModel} textAlign="right" />
         )}
 
         {/* Optic (red dot) */}
@@ -264,8 +290,8 @@ export default function ShooterScreen() {
             </TouchableOpacity>
             {manualOpticBrand && (
               <TextInput style={s.input} placeholder="הקלד יצרן כוונת" placeholderTextColor={C.mutedLt}
-                value={opticBrand === '__manual__' ? '' : opticBrand}
-                onChangeText={(t) => setOpticBrand(t || '__manual__')} textAlign="right" />
+                value={opticBrand}
+                onChangeText={setOpticBrand} textAlign="right" />
             )}
             {(opticBrand && !manualOpticBrand) && (
               <>
@@ -280,8 +306,8 @@ export default function ShooterScreen() {
             )}
             {(manualOpticBrand || manualOpticModel) && (
               <TextInput style={s.input} placeholder="הקלד דגם כוונת" placeholderTextColor={C.mutedLt}
-                value={opticModel === '__manual__' ? '' : opticModel}
-                onChangeText={(t) => setOpticModel(t)} textAlign="right" />
+                value={opticModel}
+                onChangeText={setOpticModel} textAlign="right" />
             )}
           </>
         )}

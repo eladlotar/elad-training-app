@@ -165,16 +165,26 @@ export default function FolderScreen() {
     if (docs.length >= maxDocs) return limitAlert();
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) { Alert.alert('נדרשת הרשאה', 'יש לאשר גישה למצלמה בהגדרות הטלפון'); return; }
-    const res = await ImagePicker.launchCameraAsync({ quality: 0.7, base64: true });
-    await addFromResult(res);
+    // בלי העטיפה הזאת כשל בפתיחת המצלמה (סימולטור, בוחר אחר פתוח, זיכרון נמוך
+    // באנדרואיד) נופל כחריגה שלא נתפסת, והכפתור פשוט לא עושה כלום בלי שום הודעה.
+    try {
+      const res = await ImagePicker.launchCameraAsync({ quality: 0.7, base64: true });
+      await addFromResult(res);
+    } catch (e) {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח את המצלמה. נסה שוב.');
+    }
   };
 
   const pickImage = async () => {
     if (docs.length >= maxDocs) return limitAlert();
-    const res = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.7, base64: true, mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    });
-    await addFromResult(res);
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.7, base64: true, mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+      await addFromResult(res);
+    } catch (e) {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח את גלריית התמונות. נסה שוב.');
+    }
   };
 
   const limitAlert = () => Alert.alert('התיקייה מלאה', `ניתן לשמור עד ${maxDocs} מסמכים. מחק כדי להוסיף חדשים.`);

@@ -79,7 +79,12 @@ export default function ShopScreen() {
     if (product.purchase_url) {
       router.push({
         pathname: '/payment',
-        params: { url: product.purchase_url, name: product.name },
+        params: {
+          url: product.purchase_url,
+          name: product.name,
+          price: product.price != null ? String(product.price) : '',
+          billing: product.is_subscription ? 'monthly' : 'once',
+        },
       });
       return;
     }
@@ -152,6 +157,9 @@ export default function ShopScreen() {
             <Text style={s.cardPrice}>
               {p.is_subscription ? `${p.price} ש"ח לחודש` : `${p.price} ש"ח`}
             </Text>
+            {p.is_subscription && (
+              <Text style={s.cardBilling}>חיוב חודשי בהוראת קבע · התחייבות ל-6 חודשים</Text>
+            )}
           </View>
           {p.owned && (
             <View style={[s.chip, s.chipOwned]}>
@@ -171,6 +179,13 @@ export default function ShopScreen() {
           <View style={s.quotaRow}>
             <Ionicons name="repeat" size={15} color={C.textSecondary} />
             <Text style={s.quotaText}>{quota}</Text>
+          </View>
+        )}
+        {/* המחיר לא כולל כדורים — הנקודה שהכי חסרה למשתמשים (משוב 22/09/2026) */}
+        {p.is_subscription && (
+          <View style={s.quotaRow}>
+            <Ionicons name="information-circle-outline" size={15} color={C.textSecondary} />
+            <Text style={s.quotaText}>לא כולל תחמושת — נרכשת בנפרד</Text>
           </View>
         )}
 
@@ -348,6 +363,7 @@ const makeStyles = (C) => StyleSheet.create({
   cardHeaderText: { flex: 1, alignItems: 'flex-end' },
   cardName: { fontSize: 17, fontWeight: '800', color: C.text },
   cardPrice: { fontSize: 15, fontWeight: '700', color: C.textSecondary, marginTop: 3 },
+  cardBilling: { fontSize: 12, fontWeight: '600', color: C.muted, marginTop: 2 },
 
   chip: {
     flexDirection: 'row-reverse',
