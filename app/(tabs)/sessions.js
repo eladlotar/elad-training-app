@@ -12,10 +12,13 @@ import {
   getSessions,
   getSessionsByDate,
   getSessionDates,
+  getExtraTrainingOffer,
+  startExtraTrainingPayment,
   enrollInSession,
   cancelEnrollment,
 } from '../../src/services/sessions';
 import { useTheme } from '../../src/context/ThemeContext';
+import { DEFAULT_VENUE } from '../../src/constants/venue';
 
 const VIEW_PREF_KEY = 'elad_calendar_view'; // per-user default view
 const HEB_DAYS_SHORT = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
@@ -44,6 +47,8 @@ export default function SessionsScreen() {
   const [sessionDates, setSessionDates] = useState([]);
   const [user, setUser] = useState(null);
   const [enrolling, setEnrolling] = useState(null);
+  // הצעת "אימון נוסף בתשלום" למי שגמר את המכסה. null = כבוי.
+  const [extraOffer, setExtraOffer] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
@@ -61,6 +66,7 @@ export default function SessionsScreen() {
     }
     setSessionsByDate(getSessionsByDate());
     setSessionDates(getSessionDates());
+    setExtraOffer(getExtraTrainingOffer());
   };
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
@@ -102,6 +108,59 @@ export default function SessionsScreen() {
     license_expired: 'רישיון הנשק שלך אינו בתוקף במערכת. יש לעדכן את תאריך החידוש כדי להירשם לאימונים.',
   };
 
+  // תווית הכפתור כשהשרת חוסם: במקום "הרשמה" שנכשלת רק בלחיצה, המתאמן רואה
+  // מראש מה חסר (משוב משתמשים 22/09/2026 — "להירשם רק אחרי רישום למנוי").
+  // רישיון ופרטי יורה נשארים על "הרשמה": הלחיצה מובילה להשלמה.
+  const BLOCK_LABEL = {
+    no_product: 'נדרש מנוי',
+    not_started: 'המנוי טרם נפתח',
+    no_credit: 'נגמרו הכניסות',
+    quota_exceeded: 'המכסה נוצלה',
+    rule_limit: 'המכסה נוצלה',
+    debt: 'חוב פתוח',
+    inactive: 'חשבון לא פעיל',
+  };
+
+  // ── אימון נוסף בתשלום ─────────────────────────────────────────────────
+  // מי שגמר את מכסת המנוי החודשית יכול לקנות את האימון הזה.
+  // התשלום צמוד לאימון הספציפי: השרת פותח שריון מקום, ורק אחרי
+  // שהתשלום נקלט השריון הופך להרשמה. לא נפתח קרדיט ולא כרטיסייה.
+  const buyExtraTraining = async (session) => {
+    setEnrolling(session.id);
+    try {
+      const res = await startExtraTrainingPayment(session.id);
+      router.push({
+        pathname: '/payment',
+        params: {
+          url: res.payment_url,
+          name: `אימון נוסף · ${session.title}`,
+          price: res.price != null ? String(res.price) : '',
+          billing: 'once',
+          verify: 'enrollment',
+          event_id: session.id,
+        },
+      });
+    } catch (e) {
+      Alert.alert('לא ניתן לפתוח תשלום', e.message);
+    } finally {
+      setEnrolling(null);
+    }
+  };
+
+  const offerExtraTraining = (session) => {
+    const mins = extraOffer?.hold_minutes || 30;
+    Alert.alert(
+      'ניצלת את המכסה החודשית',
+      `אפשר להירשם לאימון הזה בתשלום של ₪${extraOffer.price}.\n\n` +
+      `${session.start_time} · ${session.title}\n\n` +
+      `המקום נשמר לך ${mins} דקות עד להשלמת התשלום. הכדורים בתשלום נפרד.`,
+      [
+        { text: 'לא עכשיו', style: 'cancel' },
+        { text: `תשלום ₪${extraOffer.price}`, onPress: () => buyExtraTraining(session) },
+      ]
+    );
+  };
+
   const handleEnroll = (session) => {
     if (!user?.id) { Alert.alert('שגיאה', 'יש להתחבר מחדש'); return; }
 
@@ -114,10 +173,21 @@ export default function SessionsScreen() {
         ]);
         return;
       }
+      // המכסה נגמרה, אבל יש מסלול בתשלום — מציעים אותו במקום
+      // להודיע למתאמן שאי אפשר ולסגור את הדלת.
+      if (session.block_reason === 'quota_exceeded' && extraOffer) {
+        offerExtraTraining(session);
+        return;
+      }
       if (session.block_reason === 'profile_incomplete') {
         Alert.alert('נדרשת השלמת פרטים', BLOCK_MSG.profile_incomplete, [
           { text: 'לא עכשיו', style: 'cancel' },
           { text: 'להשלמת פרטים', onPress: () => router.push('/(tabs)/shooter') },
+        ]);
+      } else if (session.block_reason === 'no_product') {
+        Alert.alert('נדרש מנוי', 'ההרשמה לאימונים פתוחה למנויים. אפשר להצטרף למנוי בחנות ולחזור להירשם.', [
+          { text: 'לא עכשיו', style: 'cancel' },
+          { text: 'לרכישת מנוי', onPress: () => router.push('/(tabs)/shop') },
         ]);
       } else {
         Alert.alert('לא ניתן להירשם', BLOCK_MSG[session.block_reason]);
@@ -127,7 +197,7 @@ export default function SessionsScreen() {
 
     Alert.alert(
       session.title,
-      `${session.start_time} - ${session.end_time}${session.location ? '\n' + session.location : ''}`,
+      `${session.start_time} - ${session.end_time}\n${session.location || DEFAULT_VENUE}`,
       [
         { text: 'ביטול', style: 'cancel' },
         {
@@ -288,11 +358,13 @@ export default function SessionsScreen() {
       {viewMode === 'week' && (
         <>
           <View style={s.rowNav}>
-            <TouchableOpacity onPress={() => setWeekAnchor(dateToStr(addDays(parseStr(weekAnchor), 7)))} style={s.navBtn}>
+            {/* בעברית הזמן זורם מימין לשמאל: החץ הימני (הילד הראשון ב-row-reverse)
+                חוזר אחורה, כמו בתצוגה החודשית. */}
+            <TouchableOpacity onPress={() => setWeekAnchor(dateToStr(addDays(parseStr(weekAnchor), -7)))} style={s.navBtn}>
               <Ionicons name="chevron-forward" size={20} color={C.text} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setWeekAnchor(todayStr)}><Text style={s.rowNavTitle}>{weekLabel}</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => setWeekAnchor(dateToStr(addDays(parseStr(weekAnchor), -7)))} style={s.navBtn}>
+            <TouchableOpacity onPress={() => setWeekAnchor(dateToStr(addDays(parseStr(weekAnchor), 7)))} style={s.navBtn}>
               <Ionicons name="chevron-back" size={20} color={C.text} />
             </TouchableOpacity>
           </View>
@@ -321,7 +393,8 @@ export default function SessionsScreen() {
       {/* ── DAY VIEW ── */}
       {viewMode === 'day' && (
         <View style={s.rowNav}>
-          <TouchableOpacity onPress={() => setSelectedDate(dateToStr(addDays(parseStr(selectedDate), 1)))} style={s.navBtn}>
+          {/* כמו בתצוגה השבועית והחודשית: החץ הימני חוזר אחורה בזמן. */}
+          <TouchableOpacity onPress={() => setSelectedDate(dateToStr(addDays(parseStr(selectedDate), -1)))} style={s.navBtn}>
             <Ionicons name="chevron-forward" size={22} color={C.text} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setSelectedDate(todayStr)}>
@@ -332,7 +405,7 @@ export default function SessionsScreen() {
               {parseStr(selectedDate).getDate()} ב{HEB_MONTHS[parseStr(selectedDate).getMonth()]}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setSelectedDate(dateToStr(addDays(parseStr(selectedDate), -1)))} style={s.navBtn}>
+          <TouchableOpacity onPress={() => setSelectedDate(dateToStr(addDays(parseStr(selectedDate), 1)))} style={s.navBtn}>
             <Ionicons name="chevron-back" size={22} color={C.text} />
           </TouchableOpacity>
         </View>
@@ -379,8 +452,18 @@ export default function SessionsScreen() {
                   <Text style={[s.timeText, s.timeEnd]}>{session.end_time}</Text>
                 </View>
                 <View style={s.cardContent}>
-                  <Text style={s.cardTitle}>{session.title}</Text>
-                  <Text style={s.cardMeta}>{session.location} | {session.instructor_name}</Text>
+                  <View style={s.titleRow}>
+                    <Text style={s.cardTitle}>{session.title}</Text>
+                    {isEnrolled && (
+                      <View style={s.enrolledChip}>
+                        <Ionicons name="checkmark-circle" size={13} color={C.ok} />
+                        <Text style={s.enrolledChipText}>נרשמת</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={s.cardMeta}>
+                    {[session.location || DEFAULT_VENUE, session.instructor_name].filter(Boolean).join(' | ')}
+                  </Text>
                   {/* כמות הכדורים שנקבעה לאימון. מוצגת רק כשיש ערך —
                       "0 כדורים" הוא מידע שגוי, לא מידע חסר. */}
                   {session.training_ammo > 0 ? (
@@ -409,6 +492,21 @@ export default function SessionsScreen() {
                       </TouchableOpacity>
                     ) : isCourse && !session.can_enroll ? (
                       <Text style={s.courseNote}>הרשמה מול בית הספר</Text>
+                    ) : !session.can_enroll && session.block_reason === 'quota_exceeded' && extraOffer ? (
+                      // המכסה נוצלה אבל יש מסלול בתשלום — כפתור פעיל עם
+                      // המחיר, ולא תווית חסימה מתה.
+                      <TouchableOpacity
+                        style={s.enrollBtn}
+                        onPress={() => handleEnroll(session)}
+                        disabled={isFull || isLoading} activeOpacity={0.7}
+                      >
+                        {isLoading ? <ActivityIndicator size="small" color={C.white} />
+                          : <Text style={s.enrollBtnText}>{`הרשמה · ₪${extraOffer.price}`}</Text>}
+                      </TouchableOpacity>
+                    ) : !session.can_enroll && BLOCK_LABEL[session.block_reason] ? (
+                      <TouchableOpacity style={s.blockedBtn} onPress={() => handleEnroll(session)} activeOpacity={0.7}>
+                        <Text style={s.blockedBtnText}>{BLOCK_LABEL[session.block_reason]}</Text>
+                      </TouchableOpacity>
                     ) : (
                       <TouchableOpacity
                         style={[s.enrollBtn, isFull && s.enrollBtnFull]}
@@ -534,4 +632,9 @@ const makeStyles = (C) => StyleSheet.create({
   cancelBtn: { backgroundColor: C.bg, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.err },
   cancelBtnText: { fontSize: 13, fontWeight: '700', color: C.err },
   courseNote: { fontSize: 12.5, fontWeight: '600', color: C.muted, paddingVertical: 8 },
+  titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  enrolledChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 3, backgroundColor: C.okLt, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 3 },
+  enrolledChipText: { fontSize: 11, fontWeight: '700', color: C.ok },
+  blockedBtn: { backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, minWidth: 70, alignItems: 'center' },
+  blockedBtnText: { fontSize: 12.5, fontWeight: '700', color: C.textSecondary },
 });

@@ -17,6 +17,16 @@ function serverError(result, fallback) {
 // so the screens can group/filter without re-fetching.
 let sessionsCache = null;
 
+// הצעת "אימון נוסף בתשלום" — מגיעה מהשרת יחד עם רשימת האימונים,
+// ותקפה רק למי שגמר את מכסת המנוי החודשית. null = הפיצ'ר כבוי
+// (אין מוצר פעיל או לא הוגדר קישור תשלום), והמסכים לא מציגים כלום.
+let extraTrainingOffer = null;
+
+/** { price, payment_url, hold_minutes, name } או null אם כבוי. */
+export function getExtraTrainingOffer() {
+  return extraTrainingOffer;
+}
+
 function activeSessions() {
   return sessionsCache || [];
 }
@@ -53,7 +63,26 @@ export async function getSessions() {
   sessionsCache = (result.sessions || []).filter(
     s => !String(s.title || '').includes('פרטי')
   );
+  extraTrainingOffer = result.extra_training || null;
   return sessionsCache;
+}
+
+/**
+ * פותח שריון מקום לאימון ספציפי ומחזיר את קישור התשלום.
+ * השריון תופס את המקום למשך hold_minutes — אם התשלום לא הושלם,
+ * הוא פוקע מעצמו והמקום חוזר למכירה.
+ * מי שכבר פתח שריון לאותו אימון מקבל אותו בחזרה (resumed) ולא נחסם.
+ */
+export async function startExtraTrainingPayment(sessionId) {
+  const token = await getToken();
+  if (!token) throw new Error('יש להתחבר מחדש');
+  const result = await callFunction('mobileAppApi', {
+    action: 'startExtraTrainingPayment',
+    token,
+    session_id: sessionId,
+  });
+  if (!result.ok) throw serverError(result, 'לא ניתן לפתוח תשלום');
+  return result;
 }
 
 export async function enrollInSession(customerId, sessionId) {

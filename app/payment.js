@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
+  View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, BackHandler,
 } from 'react-native';
 import { Text } from '../src/components/ScaledText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getMySubscription } from '../src/services/subscription';
+import { getMyEnrollments } from '../src/services/sessions';
 import { useTheme } from '../src/context/ThemeContext';
 
 // דף התשלום של גרואו מוטמע בתוך האפליקציה (החלטת אלעד 13/07) — לא נפתח
@@ -19,6 +20,17 @@ const SUCCESS_HINTS = [
   'success', 'thank', 'approved', 'confirmation', 'paymentsuccess', 'completed',
 ];
 
+// המסך נפתח גם מקישור עמוק (elad-training://payment?url=...). בלי אימות הדומיין,
+// כל כתובת הייתה מוצגת תחת הכותרת "תשלום מאובטח דרך גרואו" (ממצא סקירת אבטחה
+// 22/09/2026). מותרים רק דפי הסליקה של גרואו ואתר בית הספר, ורק ב-https.
+const ALLOWED_PAYMENT_HOSTS = ['grow.link', 'meshulam.co.il', 'eladlotar.com'];
+function isAllowedPaymentUrl(raw) {
+  const m = String(raw || '').match(/^https:\/\/([^/?#]+)/i);
+  if (!m) return false;
+  const host = m[1].toLowerCase();
+  return ALLOWED_PAYMENT_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+}
+
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_DELAY_MS = 2500;
 
@@ -27,12 +39,41 @@ export default function PaymentScreen() {
   const s = makeStyles(C);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { url, name } = useLocalSearchParams();
+  // verify קובע איך נראית הצלחה. ברירת המחדל 'subscription' היא
+  // ההתנהגות הוותיקה (מנוי או בקשה חדשה נפתחו). 'enrollment' משמש
+  // ל"אימון נוסף בתשלום": שם לא נפתח מנוי — נוצרת הרשמה לאימון אחד,
+  // ולכן הבדיקה היא שההרשמה לאותו אירוע הפכה לפעילה.
+  const { url, name, price, billing, verify, event_id: eventId } =
+    useLocalSearchParams();
+  const verifyMode = verify === 'enrollment' ? 'enrollment' : 'subscription';
+  // הנוסחים משתנים לפי מה שנרכש. במצב enrollment לא נפתח מנוי —
+  // נרכש אימון אחד, והמסך חייב להגיד את זה ולהחזיר ליומן ולא לחנות.
+  const isEnroll = verifyMode === 'enrollment';
+  const TXT = {
+    confirmed: isEnroll
+      ? 'ההרשמה לאימון אושרה ותתקבל הודעת וואטסאפ.'
+      : 'המנוי מופיע בחשבון שלך במסך "המנוי שלי".',
+    confirmedBar: isEnroll
+      ? 'ההרשמה לאימון אושרה ותתקבל הודעת וואטסאפ.'
+      : 'המנוי מופיע בחשבון שלך ותתקבל הודעת וואטסאפ.',
+    pending: isEnroll
+      ? 'אם השלמת תשלום, ההרשמה תופיע תוך דקות.'
+      : 'אם השלמת תשלום, המנוי יופיע תוך דקות.',
+    back: isEnroll ? 'חזרה ליומן' : 'חזרה לחנות',
+  };
+  const safeUrl = isAllowedPaymentUrl(url) ? String(url) : '';
   // idle → checking → confirmed | unknown
   const [status, setStatus] = useState('idle');
   // The user chose to leave the payment page — show the status view instead
   const [exiting, setExiting] = useState(false);
   const [failed, setFailed] = useState(false);
+  // דף התקנון של גרואו (ודפי האימות של חברת האשראי) נפתחים באותו חלון,
+  // ובלי סרגל דפדפן אין דרך לחזור מהם לדף התשלום (משוב משתמשים 22/09/2026).
+  const [canGoBack, setCanGoBack] = useState(false);
+  // כתובת דף התשלום אחרי ההפניות של גרואו. הקישור הקצר מפנה לדף המלא, ולכן
+  // ההיסטוריה "יכולה לחזור" כבר בנחיתה — בלי ההשוואה הזו כפתור החזרה הופיע
+  // גם על דף התשלום עצמו (נתפס באימות בסימולטור 22/09/2026).
+  const landingUrlRef = useRef(null);
   const webRef = useRef(null);
   const baselineRef = useRef(null);
   const checkingRef = useRef(false);
@@ -41,6 +82,10 @@ export default function PaymentScreen() {
   // Snapshot how many subscriptions/pending requests existed BEFORE the
   // payment, so "success" means something new actually appeared.
   useEffect(() => {
+    // במצב enrollment אין צורך בצילום מצב: השריון נשמר כ-pending_payment
+    // ואינו מוחזר ב-getMyEnrollments, ולכן עצם הופעת ההרשמה הפעילה
+    // לאותו אירוע היא ההוכחה שהתשלום נקלט.
+    if (verifyMode === 'enrollment') return;
     let alive = true;
     (async () => {
       try {
@@ -54,7 +99,7 @@ export default function PaymentScreen() {
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [verifyMode]);
 
   const verifyPayment = async () => {
     if (checkingRef.current || confirmedRef.current) return;
@@ -63,15 +108,26 @@ export default function PaymentScreen() {
     const baseline = baselineRef.current;
     for (let attempt = 0; attempt < VERIFY_ATTEMPTS; attempt++) {
       try {
-        const d = await getMySubscription();
-        const count =
-          (d.subscriptions?.length || 0) + (d.pending_requests?.length || 0);
-        // בלי צילום מצב התחלתי אי אפשר להבחין בין מנוי ותיק לרכישה חדשה — לא מכריזים הצלחה
-        if (baseline != null && count > baseline) {
-          confirmedRef.current = true;
-          checkingRef.current = false;
-          setStatus('confirmed');
-          return;
+        if (verifyMode === 'enrollment') {
+          const list = await getMyEnrollments();
+          const found = (list || []).some(e => String(e.session_id) === String(eventId));
+          if (found) {
+            confirmedRef.current = true;
+            checkingRef.current = false;
+            setStatus('confirmed');
+            return;
+          }
+        } else {
+          const d = await getMySubscription();
+          const count =
+            (d.subscriptions?.length || 0) + (d.pending_requests?.length || 0);
+          // בלי צילום מצב התחלתי אי אפשר להבחין בין מנוי ותיק לרכישה חדשה — לא מכריזים הצלחה
+          if (baseline != null && count > baseline) {
+            confirmedRef.current = true;
+            checkingRef.current = false;
+            setStatus('confirmed');
+            return;
+          }
         }
       } catch {}
       if (attempt < VERIFY_ATTEMPTS - 1) {
@@ -83,9 +139,27 @@ export default function PaymentScreen() {
   };
 
   const detectSuccess = (navState) => {
+    const current = String(navState?.url || '');
+    if (landingUrlRef.current == null && navState?.loading === false && current) {
+      landingUrlRef.current = current;
+    }
+    setCanGoBack(
+      !!navState?.canGoBack && landingUrlRef.current != null && current !== landingUrlRef.current
+    );
     const u = String(navState?.url || '').toLowerCase();
     if (SUCCESS_HINTS.some((h) => u.includes(h))) verifyPayment();
   };
+
+  const goBackInPage = () => { webRef.current?.goBack(); };
+
+  // כפתור "אחורה" של אנדרואיד חוזר בתוך דף התשלום לפני שהוא סוגר את המסך
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (canGoBack && !exiting && !failed) { goBackInPage(); return true; }
+      return false;
+    });
+    return () => sub.remove();
+  }, [canGoBack, exiting, failed]);
 
   const close = () => {
     // Verification already finished (or the status view is showing) — just leave
@@ -103,12 +177,12 @@ export default function PaymentScreen() {
     ]);
   };
 
-  if (!url) {
+  if (!safeUrl) {
     return (
       <View style={s.center}>
-        <Text style={s.errTitle}>קישור התשלום חסר</Text>
+        <Text style={s.errTitle}>קישור התשלום חסר או אינו מורשה</Text>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Text style={s.backBtnText}>חזרה לחנות</Text>
+          <Text style={s.backBtnText}>{TXT.back}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -121,6 +195,12 @@ export default function PaymentScreen() {
     <View style={s.container}>
       {/* Header */}
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        {canGoBack && !exiting && !failed && (
+          <TouchableOpacity onPress={goBackInPage} style={s.webBackBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="chevron-forward" size={22} color={C.text} />
+            <Text style={s.webBackText}>חזרה לתשלום</Text>
+          </TouchableOpacity>
+        )}
         <View style={s.headerText}>
           <Text style={s.headerTitle} numberOfLines={1}>{name || 'תשלום מאובטח'}</Text>
           <View style={s.secureRow}>
@@ -133,6 +213,19 @@ export default function PaymentScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* שורת סיכום: מה משלמים ובאיזו תדירות — כדי שלא יהיה ספק אם 360 ש"ח
+          זה לחודש או סה"כ (משוב משתמשים 22/09/2026) */}
+      {!exiting && !failed && price ? (
+        <View style={s.summaryBar}>
+          <Text style={s.summaryPrice}>{price} ש"ח{billing === 'monthly' ? ' לחודש' : ''}</Text>
+          <Text style={s.summaryNote}>
+            {billing === 'monthly'
+              ? 'הוראת קבע חודשית · התחייבות ל-6 חודשים · לא כולל תחמושת'
+              : 'תשלום חד-פעמי'}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Status view after the user left the payment page */}
       {exiting ? (
         <View style={s.center}>
@@ -140,18 +233,18 @@ export default function PaymentScreen() {
             <>
               <Ionicons name="checkmark-circle" size={44} color={C.ok} />
               <Text style={s.errTitle}>התשלום נקלט!</Text>
-              <Text style={s.errText}>המנוי מופיע בחשבון שלך במסך "המנוי שלי".</Text>
+              <Text style={s.errText}>{TXT.confirmed}</Text>
               <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-                <Text style={s.backBtnText}>חזרה לחנות</Text>
+                <Text style={s.backBtnText}>{TXT.back}</Text>
               </TouchableOpacity>
             </>
           ) : status === 'unknown' ? (
             <>
               <Ionicons name="time-outline" size={44} color={C.muted} />
               <Text style={s.errTitle}>לא זוהה עדיין תשלום חדש</Text>
-              <Text style={s.errText}>אם השלמת תשלום, המנוי יופיע תוך דקות.</Text>
+              <Text style={s.errText}>{TXT.pending}</Text>
               <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-                <Text style={s.backBtnText}>חזרה לחנות</Text>
+                <Text style={s.backBtnText}>{TXT.back}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -176,7 +269,7 @@ export default function PaymentScreen() {
       ) : (
         <WebView
           ref={webRef}
-          source={{ uri: String(url) }}
+          source={{ uri: safeUrl }}
           // סרגל הניווט של אנדרואיד מרחף מעל תחתית המסך. בלי הריווח הזה
           // כפתור התשלום של גרואו — שיושב בתחתית הדף — נחתך מתחתיו
           // ואי אפשר ללחוץ עליו. אומת על גלקסי A06 עם אנדרואיד 14.
@@ -205,16 +298,16 @@ export default function PaymentScreen() {
         <View style={[s.paidBar, { paddingBottom: insets.bottom + 16 }]}>
           <View style={s.paidTextWrap}>
             <Text style={s.paidTitle}>התשלום נקלט!</Text>
-            <Text style={s.paidText}>המנוי מופיע בחשבון שלך ותתקבל הודעת וואטסאפ.</Text>
+            <Text style={s.paidText}>{TXT.confirmedBar}</Text>
           </View>
           <TouchableOpacity style={s.paidBtn} onPress={() => router.back()}>
-            <Text style={s.paidBtnText}>חזרה לחנות</Text>
+            <Text style={s.paidBtnText}>{TXT.back}</Text>
           </TouchableOpacity>
         </View>
       )}
       {!exiting && status === 'unknown' && (
         <View style={[s.pendingBar, { paddingBottom: insets.bottom + 14 }]}>
-          <Text style={s.pendingText}>אם השלמת תשלום, המנוי יופיע תוך דקות.</Text>
+          <Text style={s.pendingText}>{TXT.pending}</Text>
         </View>
       )}
     </View>
@@ -238,6 +331,15 @@ const makeStyles = (C) => StyleSheet.create({
   secureRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginTop: 2 },
   secureText: { fontSize: 12, fontWeight: '600', color: C.ok },
   closeBtn: { marginLeft: 4 },
+  webBackBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 2, marginLeft: 10 },
+  webBackText: { fontSize: 13, fontWeight: '700', color: C.text },
+  summaryBar: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
+    paddingHorizontal: 18, paddingVertical: 8,
+    backgroundColor: C.cardAlt, borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  summaryPrice: { fontSize: 15, fontWeight: '800', color: C.text },
+  summaryNote: { flex: 1, fontSize: 11.5, fontWeight: '600', color: C.textSecondary, textAlign: 'right' },
 
   web: { flex: 1 },
 
