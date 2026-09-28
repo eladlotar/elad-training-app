@@ -42,3 +42,7 @@ yarn-error.*
 
 # גיבויים מקומיים לפני שינויים — לא נכנסים לבנייה
 .backups/
+
+# אישורי חתימה — לעולם לא במאגר
+credentials.json
+credentials/
