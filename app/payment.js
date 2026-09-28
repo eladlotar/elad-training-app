@@ -221,7 +221,9 @@ export default function PaymentScreen() {
           <Text style={s.summaryNote}>
             {billing === 'monthly'
               ? 'הוראת קבע חודשית · התחייבות ל-6 חודשים · לא כולל תחמושת'
-              : 'תשלום חד-פעמי'}
+              : isEnroll
+                ? 'תשלום חד-פעמי · לא כולל תחמושת'
+                : 'תשלום חד-פעמי'}
           </Text>
         </View>
       ) : null}
